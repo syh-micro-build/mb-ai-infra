@@ -135,7 +135,7 @@ if [[ "$command" != version && "$command" != external-verify ]]; then
 fi
 if [[ "$build" == true ]]; then
   docker build --build-arg "VCS_REF=$revision" -f "$repo/runner/Dockerfile" -t "$image" "$repo"
-elif [[ "$command" == init && "$image" != sha256:* ]] || ! docker image inspect "$image" >/dev/null 2>&1; then
+elif ! docker image inspect "$image" >/dev/null 2>&1; then
   [[ "$image" != sha256:* ]] || die 'The pinned local image is missing. Run ./infra init again.'
   docker pull "$image"
 fi

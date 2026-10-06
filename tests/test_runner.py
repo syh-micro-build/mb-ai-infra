@@ -164,6 +164,12 @@ if sys.argv[1] == 'run':
         self.assertEqual(result.returncode, 7)
         self.assertFalse((self.root / '.cache/runner-image').exists())
 
+    def test_init_reuses_a_local_image_without_a_registry_pull(self):
+        result = self.run_cli('init')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(call[0] == 'pull' for call in self.calls()))
+        self.assertIn('sha256:' + 'a' * 64, (self.root / '.cache/runner-image').read_text())
+
     def test_external_verification_does_not_mount_ssh_credentials(self):
         result = self.run_cli('external-verify', '--address', '203.0.113.10')
         self.assertEqual(result.returncode, 0, result.stderr)
