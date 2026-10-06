@@ -55,6 +55,16 @@ YAML
   export INFRA_INVENTORY="$scratch/inventory/hosts.yml"
   docker exec "$node" sh -c 'test ! -x /usr/bin/python3'
   ./infra init
+  printf 'node%s %s\n' "$version" "$(cat "$scratch/identity.pub")" > "$scratch/wrong-known-hosts"
+  if ./infra bootstrap-zero --known-hosts "$scratch/wrong-known-hosts" > "$scratch/host-key.log" 2>&1; then
+    echo 'A mismatched host key was accepted' >&2; exit 1
+  fi
+  grep -q 'Host key verification failed' "$scratch/host-key.log"
+  if ./infra bootstrap-zero --limit missing-host > "$scratch/limit.log" 2>&1; then
+    echo 'An empty host selection was accepted' >&2; exit 1
+  fi
+  grep -q 'selects no mb_ai hosts' "$scratch/limit.log"
+  docker exec "$node" sh -c 'test ! -x /usr/bin/python3'
   if ./infra preflight > "$scratch/preflight.log" 2>&1; then
     echo 'Preflight incorrectly passed without Python' >&2; exit 1
   fi
