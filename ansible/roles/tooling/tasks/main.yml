@@ -23,11 +23,3 @@
     group: root
     mode: '0644'
   loop: [infra.py, firewall.py]
-
-- name: Install non-secret host policy
-  ansible.builtin.copy:
-    content: "{{ infra_config | to_nice_json }}\n"
-    dest: /etc/mb-ai-infra/config.json
-    owner: root
-    group: root
-    mode: '0600'

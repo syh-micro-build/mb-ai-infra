@@ -1,3 +1,12 @@
+- name: Install non-secret host policy
+  ansible.builtin.copy:
+    content: "{{ infra_config | to_nice_json }}\n"
+    dest: /etc/mb-ai-infra/config.json
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Firewall restart guard
+
 - name: Install dual-stack packet filtering packages
   ansible.builtin.apt:
     name: [ufw, iptables]

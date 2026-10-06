@@ -11,7 +11,7 @@
 
 Docker 的 NAT 流量可以绕过 UFW；因此不能把 UFW active 视为应用端口已被保护。[Docker firewall 文档](https://docs.docker.com/engine/network/packet-filtering-firewalls/) 和 [iptables 文档](https://docs.docker.com/engine/network/firewall-iptables/) 说明了 DOCKER-USER 与 DNAT 后过滤的关系。
 
-`firewall.py` 只替换 `MB_AI_HOST`、`MB_AI_INFRA` 链，并保证 INPUT、DOCKER-USER、FORWARD 的入口位于第一条；保留其他规则。转发链用 `--ctorigdstport` 匹配宿主发布端口，避免把容器内部端口误当公网端口。IPv4、IPv6 均执行，失败返回非零。不清空 ruleset，不禁用 Docker 的 iptables，不关闭 IP forwarding 或 IPv6。
+`firewall.py` 只替换 `MB_AI_HOST`、`MB_AI_INFRA` 链，并保证 INPUT、DOCKER-USER、FORWARD 的入口位于第一条；保留其他规则。转发链用 `--ctorigdstport` 匹配宿主发布端口，避免把容器内部端口误当公网端口。IPv4、IPv6 均执行，失败返回非零。不清空 ruleset，不禁用 Docker 的 iptables，不关闭 IP forwarding 或 IPv6。管理员与 SSH peer 检查先于策略持久化；bootstrap 和普通 Edge deploy 不覆盖正在使用的网络策略。
 
 INPUT 链允许回环、已有连接、ICMP/ICMPv6、DHCP 回复、管理员 CIDR 到 SSH、80/443；对声明的公网接口拒绝其余新入站。DOCKER-USER 拒绝这些公网接口上的其他新转发流量。其他私网接口保留既有策略；必须把全部公网入站接口列入 inventory。策略不适用于承担通用路由/VPN 网关的主机。
 

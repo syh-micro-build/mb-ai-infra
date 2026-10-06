@@ -1,8 +1,8 @@
 - name: Compose the deployment contract
   ansible.builtin.set_fact:
-    infra_config: "{{ infra_defaults | combine(infra_site | default({}), recursive=true) | combine({'contracts': infra_contracts}) }}"
+    infra_config: "{{ infra_defaults | combine(infra_site | default({}), recursive=true) | combine({'contracts': preflight_contracts}) }}"  # noqa: var-naming[no-role-prefix]
   vars:
-    infra_contracts:
+    preflight_contracts:
       - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../contracts/sub2api.yml') | from_yaml }}"
       - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../contracts/docs.yml') | from_yaml }}"
 

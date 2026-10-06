@@ -43,7 +43,7 @@ services:
       - /var/run:size=8m,mode=0755
       - /tmp:size=16m,mode=1777
     healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:{{ infra_config.health_port }}/healthz']
+      test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, 'http://127.0.0.1:{{ infra_config.health_port }}/healthz']
       interval: 10s
       timeout: 3s
       retries: 6

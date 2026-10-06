@@ -4,7 +4,7 @@
   gather_facts: true
   serial: 1
   vars_files: [../vars/defaults.yml]
-  roles: [preflight, tooling, host_hardening, firewall]
+  roles: [preflight, host_safety, tooling, host_hardening, firewall]
   post_tasks:
     - name: Finish security handlers before verification
       ansible.builtin.meta: flush_handlers

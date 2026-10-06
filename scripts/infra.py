@@ -252,10 +252,13 @@ class Deployment:
                     else:
                         self.compose(candidate, 'stop', 'edge')
                         (self.root / 'current').unlink(missing_ok=True)
-                    if legacy:
-                        self.restore_legacy(legacy)
                 except Exception as restore_error:
                     recovery.append(str(restore_error))
+                if legacy:
+                    try:
+                        self.restore_legacy(legacy)
+                    except Exception as restore_error:
+                        recovery.append(str(restore_error))
                 receipt.update(status='recovery-failed' if recovery else 'reverted', error=str(error), recovery_errors=recovery)
                 write_json(receipt_path, receipt)
                 raise RuntimeError(f'Deploy failed; {receipt["status"]}; receipt {receipt_path}: {error}; {recovery}') from error

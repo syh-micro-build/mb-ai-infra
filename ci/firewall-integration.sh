@@ -63,8 +63,11 @@ cmp "$test_root/rules-1" "$test_root/rules-2"
 ip netns exec "$server" iptables -C INPUT -m comment --comment mb-ai-ci-unrelated -j ACCEPT
 sleep 2
 for address in 198.18.0.1 '[fd00:1::1]'; do
-  ip netns exec "$client" curl --noproxy '*' --fail --silent --max-time 5 "http://$address:80/" > /dev/null
-  ip netns exec "$client" curl --noproxy '*' --fail --silent --max-time 5 "http://$address:22/" > /dev/null
+  source_address=198.18.0.2
+  [[ "$address" != '[fd00:1::1]' ]] || source_address=fd00:1::2
+  echo "Check HTTP and authorized SSH: $address from $source_address"
+  ip netns exec "$client" curl --noproxy '*' --interface "$source_address" --fail --silent --show-error --max-time 5 "http://$address:80/" > /dev/null
+  ip netns exec "$client" curl --noproxy '*' --interface "$source_address" --fail --silent --show-error --max-time 5 "http://$address:22/" > /dev/null
   if ip netns exec "$client" curl --noproxy '*' --silent --max-time 2 "http://$address:8080/" > /dev/null; then
     echo "FAIL published 8080 reachable over $address" >&2
     exit 1

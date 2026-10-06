@@ -22,7 +22,7 @@
 
 - name: Select candidate release path
   ansible.builtin.set_fact:
-    release_path: "/opt/mb-ai-infra/releases/{{ edge_release_id }}"
+    release_path: "/opt/mb-ai-infra/releases/{{ edge_release_id }}"  # noqa: var-naming[no-role-prefix]
 
 - name: Check for a sealed release
   ansible.builtin.stat:
