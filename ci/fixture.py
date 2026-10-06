@@ -1,6 +1,7 @@
 """Synthetic contract fixtures, not application deployment units."""
 import base64
 import hashlib
+import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import time
@@ -10,7 +11,14 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
     def do_GET(self):
-        if self.path == '/ws':
+        if self.path == '/headers':
+            body = json.dumps({key: self.headers.get(key) for key in (
+                'X-Forwarded-For', 'X-Forwarded-Proto', 'X-Forwarded-Host', 'X-Forwarded-Port', 'X-Real-IP', 'Forwarded')}).encode()
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == '/ws':
             key = self.headers['Sec-WebSocket-Key']
             accept = base64.b64encode(hashlib.sha1((key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest()).decode()
             self.send_response(101)

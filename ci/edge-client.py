@@ -1,4 +1,5 @@
 import http.client
+import json
 import contextlib
 import os
 import socket
@@ -21,6 +22,16 @@ with contextlib.closing(connection()) as client:
     assert response.read() == b'/docs/deep/link|127.0.0.1'
     assert response.getheader('Strict-Transport-Security')
     assert response.getheader('X-Content-Type-Options') == 'nosniff'
+
+with contextlib.closing(connection()) as client:
+    client.request('GET', '/headers', headers={
+        'X-Forwarded-For': '198.51.100.99', 'X-Forwarded-Proto': 'http',
+        'X-Forwarded-Host': 'attacker.example.com', 'X-Forwarded-Port': '8080',
+        'X-Real-IP': '198.51.100.99', 'Forwarded': 'for=198.51.100.99;proto=http;host=attacker.example.com'})
+    headers = json.loads(client.getresponse().read())
+    assert headers == {'X-Forwarded-For': '127.0.0.1', 'X-Forwarded-Proto': 'https',
+                       'X-Forwarded-Host': 'test.example.com', 'X-Forwarded-Port': '443',
+                       'X-Real-IP': '127.0.0.1', 'Forwarded': None}
 
 with contextlib.closing(connection()) as client:
     started = time.monotonic()
