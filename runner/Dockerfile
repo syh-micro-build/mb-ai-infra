@@ -29,7 +29,7 @@ RUN apt-get update \
 COPY requirements-runner.txt /opt/runner/requirements-runner.txt
 COPY ansible/requirements.yml /opt/runner/ansible/requirements.yml
 RUN python -m pip install --no-cache-dir -r /opt/runner/requirements-runner.txt \
-    && ANSIBLE_CONFIG=/dev/null ansible-galaxy collection install \
+    && env -u ANSIBLE_CONFIG ansible-galaxy collection install \
        -r /opt/runner/ansible/requirements.yml -p /opt/runner/collections \
     && cd /opt/runner \
     && sha256sum requirements-runner.txt ansible/requirements.yml > toolchain.sha256
