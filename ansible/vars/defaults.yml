@@ -1,6 +1,6 @@
 infra_defaults:
   domain: ai.example.com
-  nginx_image: nginx:stable-bookworm@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609
+  nginx_image: nginx:stable-trixie@sha256:0623fd2455fb2bb0bc2ba7038817adcf7805d0790f78af91de33389d50774385
   public_interfaces: []
   admin_cidrs: []
   ssh_port: 22
