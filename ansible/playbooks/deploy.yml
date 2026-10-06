@@ -1,0 +1,7 @@
+- name: Deploy a TLS Edge release transactionally
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  serial: 1
+  vars_files: [../vars/defaults.yml]
+  roles: [preflight, contract, tooling, edge]

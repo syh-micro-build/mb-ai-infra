@@ -1,0 +1,57 @@
+name: Validate
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  static:
+    name: Configuration and transaction tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install pinned validation tools
+        run: make deps
+      - name: Validate contracts, Ansible, YAML and shell scripts
+        run: make validate
+  edge:
+    name: Nginx and Compose integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: '3.12'
+      - name: Install rendering dependencies
+        run: python3 -m pip install PyYAML==6.0.3 Jinja2==3.1.6
+      - name: Exercise HTTP bootstrap, TLS, docs, SSE and WebSocket
+        run: bash ci/edge-integration.sh
+  firewall:
+    name: IPv4 and IPv6 exposure governance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+      - name: Install isolated test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iptables iproute2 python3-yaml python3-jinja2
+      - name: Test actual filtering in isolated network namespaces
+        run: sudo bash ci/firewall-integration.sh

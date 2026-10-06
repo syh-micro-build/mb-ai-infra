@@ -1,0 +1,81 @@
+- name: Detect existing Docker CLI
+  ansible.builtin.command: docker --version
+  register: docker_cli
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install a new Docker runtime without replacing an existing installation
+  when: docker_cli.rc != 0
+  block:
+    - name: Inspect potentially conflicting packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Refuse automatic replacement of another container runtime
+      ansible.builtin.assert:
+        that:
+          - "['docker.io', 'podman-docker', 'containerd', 'runc'] | intersect(ansible_facts.packages.keys()) | length == 0"
+        fail_msg: An existing runtime needs a separately planned migration; no packages have been removed.
+
+    - name: Install repository prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create apt key directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Install Docker repository signing key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Configure Docker stable repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/mb-ai-docker.sources
+        mode: '0644'
+        content: |
+          Types: deb
+          URIs: https://download.docker.com/linux/ubuntu
+          Suites: {{ ansible_facts.distribution_release }}
+          Components: stable
+          Signed-By: /etc/apt/keyrings/docker.asc
+
+    - name: Install runtime packages on a new host
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+        state: present
+        update_cache: true
+
+- name: Enable Docker without restarting a running daemon
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+  when: not ansible_check_mode or docker_cli.rc == 0
+
+- name: Verify daemon availability
+  ansible.builtin.command: docker info --format '{{ '{{' }}json .{{ '}}' }}'
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or docker_cli.rc == 0
+
+- name: Verify Compose plugin
+  ansible.builtin.command: docker compose version --short
+  register: docker_compose_version
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or docker_cli.rc == 0
+
+- name: Require Compose v2.18 or later
+  ansible.builtin.assert:
+    that: docker_compose_version.stdout | regex_replace('^v', '') is version('2.18.0', '>=')
+    fail_msg: Install a compatible Compose plugin through the existing runtime's package channel; Infra does not replace Docker.
+  when: docker_compose_version is not skipped

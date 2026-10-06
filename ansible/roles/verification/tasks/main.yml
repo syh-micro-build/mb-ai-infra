@@ -1,0 +1,26 @@
+- name: Verify local HTTPS, route contracts and ACME mapping
+  ansible.builtin.command: python3 /opt/mb-ai-infra/bin/infra.py smoke
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify declared host and Docker security
+  ansible.builtin.command:
+    argv: [python3, /opt/mb-ai-infra/bin/infra.py, security-check]
+    stdin: "{{ infra_config | to_json }}"
+  register: verification_security
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Save inspectable security report without certificate keys
+  ansible.builtin.copy:
+    content: "{{ verification_security.stdout }}\n"
+    dest: /opt/mb-ai-infra/reports/security.json
+    mode: '0640'
+  when: not ansible_check_mode
+
+- name: Require passing security verification
+  ansible.builtin.assert:
+    that: verification_security.rc == 0
+    fail_msg: "{{ verification_security.stderr }}. Report: /opt/mb-ai-infra/reports/security.json"
+  when: not ansible_check_mode

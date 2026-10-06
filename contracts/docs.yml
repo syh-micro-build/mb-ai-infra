@@ -1,0 +1,9 @@
+name: mb-ai-docs
+upstream:
+  host: 127.0.0.1
+  port: 8081
+health:
+  path: /docs/
+  expected_status: 200
+edge:
+  path_prefix: /docs/

@@ -1,0 +1,12 @@
+extends: default
+rules:
+  document-start: disable
+  line-length:
+    max: 180
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
+ignore: |
+  build/
+  .venv/
+  ansible/inventory/local/

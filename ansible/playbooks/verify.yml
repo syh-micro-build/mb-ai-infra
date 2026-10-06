@@ -1,0 +1,6 @@
+- name: Verify application contracts, Edge and host baseline
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  vars_files: [../vars/defaults.yml]
+  roles: [preflight, contract, verification]

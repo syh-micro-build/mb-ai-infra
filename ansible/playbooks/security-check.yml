@@ -1,0 +1,22 @@
+- name: Read-only security audit
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  vars_files: [../vars/defaults.yml]
+  roles: [preflight]
+  tasks:
+    - name: Audit installed policy without applying fixes
+      ansible.builtin.command:
+        argv: [python3, /opt/mb-ai-infra/bin/infra.py, security-check]
+        stdin: "{{ infra_config | to_json }}"
+      register: security_check_report
+      changed_when: false
+      failed_when: false
+      check_mode: false
+    - name: Display audit report
+      ansible.builtin.debug:
+        var: security_check_report.stdout
+    - name: Require a passing audit
+      ansible.builtin.assert:
+        that: security_check_report.rc == 0
+        fail_msg: Bootstrap installs the auditor. Failed checks are reported without repairing applications.

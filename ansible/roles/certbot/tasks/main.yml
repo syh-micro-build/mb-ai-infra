@@ -1,0 +1,24 @@
+- name: Install host Certbot without owning application containers
+  ansible.builtin.apt:
+    name: [certbot, curl, openssl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create certificate deploy hook directory
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    mode: '0755'
+
+- name: Install validated and serialized Nginx reload hook
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/certbot-deploy-hook.sh"
+    dest: /etc/letsencrypt/renewal-hooks/deploy/50-mb-ai-infra
+    mode: '0755'
+
+- name: Enable automated certificate renewal
+  ansible.builtin.systemd_service:
+    name: certbot.timer
+    enabled: true
+    state: started

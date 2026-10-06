@@ -1,0 +1,72 @@
+- name: Install dual-stack packet filtering packages
+  ansible.builtin.apt:
+    name: [ufw, iptables]
+    state: present
+
+- name: Enable UFW IPv6 support
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^IPV6='
+    line: IPV6=yes
+  notify: Firewall reload ufw
+
+- name: Allow declared administrators before enabling deny policy
+  community.general.ufw:
+    rule: allow
+    port: "{{ infra_config.ssh_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ infra_config.admin_cidrs }}"
+
+- name: Allow public Edge TCP ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ infra_config.public_tcp_ports }}"
+
+- name: Default deny incoming host traffic
+  community.general.ufw:
+    direction: incoming
+    default: deny
+
+- name: Preserve normal host egress
+  community.general.ufw:
+    direction: outgoing
+    default: allow
+
+- name: Enable host firewall after SSH allow rules
+  community.general.ufw:
+    state: enabled
+
+- name: Install persistent Docker and host ingress guard
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../security/systemd/mb-ai-docker-guard.service"
+    dest: /etc/systemd/system/mb-ai-docker-guard.service
+    mode: '0644'
+  notify: Firewall restart guard
+
+- name: Create Docker drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: '0755'
+
+- name: Require guard before Docker and recheck hooks after daemon startup
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../security/systemd/20-mb-ai-guard.conf"
+    dest: /etc/systemd/system/docker.service.d/20-mb-ai-guard.conf
+    mode: '0644'
+  notify: Firewall reload systemd
+
+- name: Enable guard without restarting Docker or applications
+  ansible.builtin.systemd_service:
+    name: mb-ai-docker-guard
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Apply updated declared policy to owned chains
+  ansible.builtin.command: python3 /opt/mb-ai-infra/bin/firewall.py apply --config /etc/mb-ai-infra/config.json
+  changed_when: false
+  when: not ansible_check_mode

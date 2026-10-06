@@ -1,0 +1,33 @@
+- name: Create infrastructure-owned directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /opt/mb-ai-infra, mode: '0750'}
+    - {path: /opt/mb-ai-infra/bin, mode: '0750'}
+    - {path: /opt/mb-ai-infra/releases, mode: '0750'}
+    - {path: /opt/mb-ai-infra/transactions, mode: '0700'}
+    - {path: /opt/mb-ai-infra/reports, mode: '0750'}
+    - {path: /etc/mb-ai-infra, mode: '0700'}
+    - {path: /etc/letsencrypt, mode: '0700'}
+    - {path: /var/lib/mb-ai-infra/acme/.well-known/acme-challenge, mode: '0755'}
+
+- name: Install infrastructure runtime only
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/{{ item }}"
+    dest: "/opt/mb-ai-infra/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [infra.py, firewall.py]
+
+- name: Install non-secret host policy
+  ansible.builtin.copy:
+    content: "{{ infra_config | to_nice_json }}\n"
+    dest: /etc/mb-ai-infra/config.json
+    owner: root
+    group: root
+    mode: '0600'

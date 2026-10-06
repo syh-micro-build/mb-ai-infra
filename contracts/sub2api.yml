@@ -1,0 +1,9 @@
+name: sub2api
+upstream:
+  host: 127.0.0.1
+  port: 8080
+health:
+  path: /
+  expected_status: 200
+edge:
+  path_prefix: /

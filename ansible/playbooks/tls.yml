@@ -1,0 +1,69 @@
+- name: Bootstrap HTTP-01 once then activate TLS
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  serial: 1
+  vars_files: [../vars/defaults.yml]
+  roles: [preflight, contract, tooling, certbot]
+  tasks:
+    - name: Require ACME contact and production issuance policy
+      ansible.builtin.assert:
+        that:
+          - infra_certbot_email is match('^[^ @]+@[^ @]+\.[^ @]+$')
+          - not infra_certbot_staging
+        fail_msg: Use a real ACME contact. Test staging with the tls-check command after provisioning.
+
+    - name: Detect existing certificate
+      ansible.builtin.stat:
+        path: "{{ infra_config.tls_root }}/live/{{ infra_config.domain }}/fullchain.pem"
+      register: tls_existing
+
+    - name: Detect an active Edge contract
+      ansible.builtin.stat:
+        path: /opt/mb-ai-infra/current/config.json
+      register: tls_active
+
+    - name: Read the active Edge contract
+      ansible.builtin.slurp:
+        src: /opt/mb-ai-infra/current/config.json
+      register: tls_active_config
+      when: tls_active.stat.exists
+
+    - name: Prevent TLS downgrade when a certificate is missing
+      ansible.builtin.assert:
+        that: not (tls_active_config.content | b64decode | from_json).get('tls_enabled', true)
+        fail_msg: An active TLS release has lost its certificate. Restore the certificate instead of downgrading Edge.
+      when: not tls_existing.stat.exists and tls_active.stat.exists
+
+    - name: Start first-run ACME-only HTTP Edge
+      ansible.builtin.include_role:
+        name: edge
+      vars:
+        edge_tls_enabled: false
+      when: not tls_existing.stat.exists
+
+    - name: Obtain a certificate without changing Nginx or applications
+      ansible.builtin.command:
+        argv:
+          - certbot
+          - certonly
+          - --non-interactive
+          - --agree-tos
+          - --webroot
+          - --webroot-path
+          - "{{ infra_config.acme_root }}"
+          - --email
+          - "{{ infra_certbot_email }}"
+          - --cert-name
+          - "{{ infra_config.domain }}"
+          - -d
+          - "{{ infra_config.domain }}"
+        creates: "{{ infra_config.tls_root }}/live/{{ infra_config.domain }}/fullchain.pem"
+      when: not tls_existing.stat.exists and not ansible_check_mode
+
+    - name: Activate final TLS Edge
+      ansible.builtin.include_role:
+        name: edge
+      vars:
+        edge_tls_enabled: true
+      when: not ansible_check_mode or tls_existing.stat.exists

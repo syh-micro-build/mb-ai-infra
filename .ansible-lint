@@ -1,0 +1,5 @@
+profile: production
+exclude_paths:
+  - build/
+  - .venv/
+  - ansible/inventory/local/

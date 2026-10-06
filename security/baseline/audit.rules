@@ -1,0 +1,6 @@
+-w /etc/ssh/ -p wa -k mb_ai_ssh
+-w /etc/mb-ai-infra/ -p wa -k mb_ai_policy
+-w /opt/mb-ai-infra/ -p wa -k mb_ai_infra
+-w /etc/letsencrypt/ -p wa -k mb_ai_tls
+-w /etc/sudoers -p wa -k mb_ai_sudo
+-w /etc/sudoers.d/ -p wa -k mb_ai_sudo

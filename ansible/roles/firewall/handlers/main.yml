@@ -1,0 +1,13 @@
+- name: Firewall reload ufw
+  community.general.ufw:
+    state: reloaded
+
+- name: Firewall restart guard
+  ansible.builtin.systemd_service:
+    name: mb-ai-docker-guard
+    daemon_reload: true
+    state: restarted
+
+- name: Firewall reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

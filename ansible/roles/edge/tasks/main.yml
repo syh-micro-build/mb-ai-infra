@@ -1,0 +1,83 @@
+- name: Check certificate availability
+  ansible.builtin.stat:
+    path: "{{ infra_config.tls_root }}/live/{{ infra_config.domain }}/fullchain.pem"
+  register: edge_certificate
+
+- name: Require certificate for TLS deployments
+  ansible.builtin.assert:
+    that: edge_certificate.stat.exists
+    fail_msg: Run the separate tls-bootstrap entry point first; ordinary deploy never downgrades a live TLS Edge.
+  when: edge_tls_enabled | default(true) | bool
+
+- name: Compute immutable release identity from source and configuration
+  ansible.builtin.set_fact:
+    edge_release_id: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../VERSION') | trim }}-{{ edge_source_hash[:12] }}-{{ edge_config_hash[:12] }}"
+  vars:
+    edge_source_hash: >-
+      {{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../edge/compose.yaml.j2')
+      ~ lookup('ansible.builtin.file', playbook_dir ~ '/../../edge/nginx/nginx.conf.j2')
+      ~ lookup('ansible.builtin.file', playbook_dir ~ '/../../edge/nginx/site.conf.j2')
+      ~ lookup('ansible.builtin.file', playbook_dir ~ '/../../edge/nginx/proxy.inc')) | hash('sha256') }}
+    edge_config_hash: "{{ (infra_config | to_json ~ (edge_tls_enabled | default(true) | string)) | hash('sha256') }}"
+
+- name: Select candidate release path
+  ansible.builtin.set_fact:
+    release_path: "/opt/mb-ai-infra/releases/{{ edge_release_id }}"
+
+- name: Check for a sealed release
+  ansible.builtin.stat:
+    path: "{{ release_path }}/manifest.json"
+  register: edge_sealed
+
+- name: Prepare and seal a new immutable candidate
+  when: not edge_sealed.stat.exists
+  block:
+    - name: Create candidate configuration directory
+      ansible.builtin.file:
+        path: "{{ release_path }}/nginx/conf.d"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Render candidate Nginx and Compose files
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../edge/{{ item.src }}"
+        dest: "{{ release_path }}/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - {src: compose.yaml.j2, dest: compose.yaml}
+        - {src: nginx/nginx.conf.j2, dest: nginx/nginx.conf}
+        - {src: nginx/site.conf.j2, dest: nginx/conf.d/site.conf}
+
+    - name: Install shared proxy settings
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../edge/nginx/proxy.inc"
+        dest: "{{ release_path }}/nginx/conf.d/proxy.inc"
+        mode: '0644'
+
+    - name: Record release contract
+      ansible.builtin.copy:
+        content: "{{ infra_config | combine({'tls_enabled': edge_tls_enabled | default(true) | bool}) | to_nice_json }}\n"
+        dest: "{{ release_path }}/config.json"
+        mode: '0644'
+
+    - name: Seal candidate with checksums
+      ansible.builtin.command:
+        argv: [python3, /opt/mb-ai-infra/bin/infra.py, manifest, --release, "{{ release_path }}"]
+        creates: "{{ release_path }}/manifest.json"
+      when: not ansible_check_mode
+
+- name: Validate and transactionally activate Edge only
+  ansible.builtin.command:
+    argv: "{{ edge_deploy_argv + edge_migration_argv }}"
+  vars:
+    edge_deploy_argv: [python3, /opt/mb-ai-infra/bin/infra.py, deploy, --release, "{{ release_path }}"]
+    edge_migration_argv: >-
+      {{ ['--legacy-container', infra_legacy_edge_container, '--legacy-project', infra_legacy_edge_project]
+      if edge_migration | default(false) | bool else [] }}
+  register: edge_deployed
+  changed_when: "'PASS Edge release:' in edge_deployed.stdout"
+  when: not ansible_check_mode

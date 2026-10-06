@@ -1,0 +1,63 @@
+- name: Compose the deployment contract
+  ansible.builtin.set_fact:
+    infra_config: "{{ infra_defaults | combine(infra_site | default({}), recursive=true) | combine({'contracts': infra_contracts}) }}"
+  vars:
+    infra_contracts:
+      - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../contracts/sub2api.yml') | from_yaml }}"
+      - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../contracts/docs.yml') | from_yaml }}"
+
+- name: Check supported host and protected boundaries
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version in ['22.04', '24.04']
+      - ansible_facts.service_mgr == 'systemd'
+      - infra_root == '/opt/mb-ai-infra'
+      - infra_config.tls_root == '/etc/letsencrypt'
+      - infra_config.acme_root == '/var/lib/mb-ai-infra/acme'
+      - infra_legacy_edge_dir == '/opt/mb-ai-edge'
+      - infra_legacy_services | difference(['nginx', 'bt-nginx']) | length == 0
+      - infra_config.ssh_port | int == ansible_port | default(22) | int
+      - infra_config.public_interfaces | difference(ansible_facts.interfaces) | length == 0
+    fail_msg: Check Ubuntu version, interface names, SSH port and infrastructure-only ownership.
+
+- name: Inspect infrastructure roots without following symlinks
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: [/opt/mb-ai-infra, /etc/mb-ai-infra, /etc/letsencrypt]
+  register: preflight_roots
+
+- name: Refuse aliased infrastructure roots
+  ansible.builtin.assert:
+    that: not item.stat.islnk | default(false)
+    fail_msg: Infrastructure roots must not redirect into application directories.
+  loop: "{{ preflight_roots.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Validate all rendered configuration inputs without writing host files
+  ansible.builtin.command:
+    argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../scripts/infra.py') }}", config-check]
+    stdin: "{{ infra_config | to_json }}"
+  changed_when: false
+  check_mode: false
+
+- name: Read existing Docker configuration
+  ansible.builtin.stat:
+    path: /etc/docker/daemon.json
+  register: preflight_daemon
+
+- name: Inspect existing Docker backend
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: preflight_daemon_config
+  when: preflight_daemon.stat.exists
+
+- name: Require the supported Docker iptables backend
+  ansible.builtin.assert:
+    that:
+      - (preflight_daemon_config.content | b64decode | from_json).get('firewall-backend', 'iptables') == 'iptables'
+      - (preflight_daemon_config.content | b64decode | from_json).get('iptables', true)
+    fail_msg: v1 supports Docker's iptables backend. Do not change a running application's daemon automatically.
+  when: preflight_daemon.stat.exists

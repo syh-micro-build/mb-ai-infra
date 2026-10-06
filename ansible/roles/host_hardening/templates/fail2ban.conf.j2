@@ -1,0 +1,10 @@
+[DEFAULT]
+backend = systemd
+ignoreip = 127.0.0.1/8 ::1 {{ infra_config.admin_cidrs | join(' ') }}
+bantime = 1h
+findtime = 10m
+maxretry = 5
+banaction = ufw
+[sshd]
+enabled = true
+port = {{ infra_config.ssh_port }}

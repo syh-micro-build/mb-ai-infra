@@ -1,0 +1,6 @@
+- name: Check black-box application contracts without changing applications
+  ansible.builtin.command:
+    argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../scripts/infra.py') }}", contract-check]
+    stdin: "{{ infra_config | to_json }}"
+  changed_when: false
+  check_mode: false
