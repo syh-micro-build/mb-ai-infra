@@ -2,6 +2,8 @@
 
 `mb-ai-infra` 是低频发布的基础设施控制工程。应用版本不进入基础设施配置。只有监听端口、公开路由、健康状态或协议等部署契约改变，才需要更新 Infra。
 
+控制平面通过 `./infra` 启动 Dockerized Runner，Python/Ansible/Collections 留在控制机。生产服务器为纯 Managed Node，经 SSH/sudo 管理；bootstrap-zero 按需引导系统 Python 和 python3-apt，再进入现有 IaC。服务器无需仓库、Ansible、pip、venv 或开发工具链。Runner 无 Docker socket，不进入应用发布生命周期，详见 [运行封装](runner.md)。
+
 | 资产 | Owner | Infra 行为 |
 |---|---|---|
 | `/opt/sub2api` | Sub2API 官方部署 | HTTP 检查、代理；不读取业务配置、不编辑、不停容器 |

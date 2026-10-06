@@ -1,10 +1,10 @@
 # TLS 与续期
 
-首次签发要求 DNS A/AAAA 正确、公网 TCP 80 可达、ACME 邮箱真实、80/443 没有其他占用者。`make tls-bootstrap` 先运行不代理应用的 HTTP-01 Edge，签发成功后用另一发布 ID 切换 TLS。失败保留 HTTP-01 阶段供修正 DNS/防火墙后重试，不生成假证书，不忽略信任校验，不把已有 TLS 降级。
+首次签发要求 DNS A/AAAA 正确、公网 TCP 80 可达、ACME 邮箱真实、80/443 没有其他占用者。`./infra tls-bootstrap` 先运行不代理应用的 HTTP-01 Edge，签发成功后用另一发布 ID 切换 TLS。失败保留 HTTP-01 阶段供修正 DNS/防火墙后重试，不生成假证书，不忽略信任校验，不把已有 TLS 降级。
 
 证书完整目录只读挂载为 `/etc/letsencrypt`，保留 live → archive 链接；私钥由 Nginx root master 读取，worker 使用 nginx 用户。Certbot 在主机运行，不挂 Docker socket。renewal deploy hook 调用 `infra.py reload`，与部署共用锁，先 `nginx -t` 再 reload。`certbot.timer` 由 Ansible启用。
 
-既有证书可以复用，但必须单独验证其续期配置。旧 Edge 的 webroot 或 standalone authenticator 不会被普通 deploy 自动改写。迁移完成后，Certbot ≥2.3 使用 `make tls-adopt`：针对一个 cert-name 以 staging 续期验证新 webroot，成功后保存新设置。再运行 `make tls-check`，完整测试续期和 deploy hook。
+既有证书可以复用，但必须单独验证其续期配置。旧 Edge 的 webroot 或 standalone authenticator 不会被普通 deploy 自动改写。迁移完成后，Certbot ≥2.3 使用 `./infra tls-adopt`：针对一个 cert-name 以 staging 续期验证新 webroot，成功后保存新设置。再运行 `./infra tls-check`，完整测试续期和 deploy hook。
 
 Ubuntu 22.04 的旧 Certbot 若不支持 reconfigure，在确认域名和证书名称后，按 [Certbot 官方文档](https://eff-certbot.readthedocs.io/en/stable/using.html#modifying-the-renewal-configuration-of-existing-certificates) 手动分两步：
 

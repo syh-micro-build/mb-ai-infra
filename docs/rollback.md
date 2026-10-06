@@ -8,9 +8,9 @@ sudo readlink -f /opt/mb-ai-infra/current
 sudo ls /opt/mb-ai-infra/releases
 sudo ls /opt/mb-ai-infra/transactions
 # 控制端选择明确的保留版本。
-make rollback RELEASE=1.0.0-<source-hash>-<config-hash>
-make verify
-make external-verify
+./infra rollback 1.0.0-<source-hash>-<config-hash>
+./infra verify
+./infra external-verify
 ```
 
 回滚候选也检查清单、应用契约、Nginx 语法、可信 TLS 和 HTTP 路由；失败则恢复回滚前的 Edge。保留旧镜像缓存或确保镜像 registry 可达；版本被删除、校验不符、证书失效或应用不可达时，不强制切换。
@@ -18,7 +18,7 @@ make external-verify
 旧 Edge 迁移恢复使用单独入口：
 
 ```bash
-make legacy-rollback RECEIPT=20261006T080000Z-<id>.json
+./infra legacy-rollback 20261006T080000Z-<id>.json
 ```
 
 它停止当前 Infra Edge、恢复 receipt 中的同一旧容器和 restart policy，成功后移除 Infra current 指针。如果旧容器启动失败，会尝试重新启动 Infra Edge并返回错误。检查原服务、证书和续期 webroot，再完成外部验收。

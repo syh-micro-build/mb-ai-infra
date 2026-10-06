@@ -1,3 +1,6 @@
+- name: Initialize the managed-node interpreter before gathering facts
+  ansible.builtin.import_playbook: bootstrap-zero.yml
+
 - name: Prepare infrastructure runtime without deploying applications
   hosts: mb_ai
   become: true

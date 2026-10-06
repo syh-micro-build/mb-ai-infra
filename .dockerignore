@@ -1,0 +1,9 @@
+**
+!VERSION
+!requirements-runner.txt
+!ansible/
+!ansible/requirements.yml
+!runner/
+!runner/Dockerfile
+!runner/entrypoint.sh
+!runner/dispatch.py

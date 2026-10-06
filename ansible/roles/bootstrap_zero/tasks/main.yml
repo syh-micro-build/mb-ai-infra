@@ -1,0 +1,68 @@
+- name: Require an explicit remote public-key sudo account before raw operations
+  ansible.builtin.assert:
+    that:
+      - ansible_connection | default('ssh') == 'ssh'
+      - ansible_user is defined
+      - ansible_user != 'root'
+      - ansible_user is match('^[a-z_][a-z0-9_-]*$')
+      - ansible_host | default(inventory_hostname) not in ['localhost', '127.0.0.1', '::1']
+      - ansible_password | default('') | length == 0
+      - ansible_ssh_pass | default('') | length == 0
+      - ansible_python_interpreter | default('/usr/bin/python3') == '/usr/bin/python3'
+    fail_msg: Use SSH public-key authentication, a non-root sudo account and the Ubuntu system Python path.
+
+- name: Inspect supported Ubuntu and system Python without requiring Python
+  ansible.builtin.raw: |
+    set -eu
+    test -r /etc/os-release || { echo 'Unsupported OS' >&2; exit 2; }
+    . /etc/os-release
+    case "$ID:$VERSION_ID" in
+      ubuntu:22.04|ubuntu:24.04) ;;
+      *) echo 'Only Ubuntu 22.04 and 24.04 are supported' >&2; exit 2 ;;
+    esac
+    if test -x /usr/bin/python3 && /usr/bin/python3 -c \
+      'import sys; assert (3, 9) <= sys.version_info[:2] <= (3, 14)' 2>/dev/null; then
+      echo MB_AI_PYTHON_READY
+      if /usr/bin/python3 -c 'import apt' 2>/dev/null; then echo MB_AI_APT_READY; fi
+    else
+      echo MB_AI_PYTHON_MISSING
+    fi
+  register: bootstrap_zero_probe
+  changed_when: false
+  check_mode: false
+
+- name: Install only missing managed-node Python runtime packages
+  ansible.builtin.raw: |
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get -o Acquire::Retries=3 update
+    apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 \
+      install -y --no-install-recommends python3 python3-apt
+    /usr/bin/python3 -c 'import apt,sys; assert (3, 9) <= sys.version_info[:2] <= (3, 14)'
+    echo MB_AI_PYTHON_INSTALLED
+  register: bootstrap_zero_installation
+  changed_when: "'MB_AI_PYTHON_INSTALLED' in bootstrap_zero_installation.stdout"
+  when:
+    - bootstrap_zero_install | bool
+    - not ansible_check_mode
+    - "'MB_AI_APT_READY' not in bootstrap_zero_probe.stdout"
+
+- name: Require system Python before normal Ansible modules
+  ansible.builtin.assert:
+    that:
+      - >-
+        'MB_AI_PYTHON_READY' in bootstrap_zero_probe.stdout or
+        'MB_AI_PYTHON_INSTALLED' in (bootstrap_zero_installation.stdout | default(''))
+    fail_msg: System Python is missing. Run ./infra bootstrap-zero first; preflight and check do not install packages.
+
+- name: Show the package plan when Python exists but apt bindings are missing
+  ansible.builtin.debug:
+    msg: Bootstrap would install python3-apt; check mode has not installed packages.
+  when:
+    - bootstrap_zero_install | bool
+    - ansible_check_mode
+    - "'MB_AI_APT_READY' not in bootstrap_zero_probe.stdout"
+
+- name: Reset SSH after initializing the system interpreter
+  ansible.builtin.meta: reset_connection
+  when: "'MB_AI_PYTHON_INSTALLED' in (bootstrap_zero_installation.stdout | default(''))"

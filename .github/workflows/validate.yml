@@ -22,7 +22,9 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements-ci.txt
+          cache-dependency-path: |
+            requirements-ci.txt
+            requirements-runner.txt
       - name: Install pinned validation tools
         run: make deps
       - name: Validate contracts, Ansible, YAML and shell scripts

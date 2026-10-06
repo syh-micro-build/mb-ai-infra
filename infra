@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# Operator entry point. Bash and Docker are the only local runtime dependencies.
+set -euo pipefail
+umask 077
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+usage() {
+  cat <<'HELP'
+Usage: ./infra COMMAND [OPTIONS]
+  init [--build]              Validate local Runner/inventory/SSH; no target contact
+  preflight | check           Read-only inspection / Ansible plan
+  bootstrap-zero              Install missing Ubuntu system Python and python3-apt
+  bootstrap | provision       Prepare runtime / initialize a new infrastructure host
+  deploy | verify             Deploy Edge / validate host and Edge
+  security-check | security-apply
+  tls-bootstrap | tls-check | tls-adopt
+  migrate | migrate-verify
+  rollback RELEASE            Restore one retained Edge release
+  legacy-rollback RECEIPT.json Restore the recorded legacy Edge
+  external-verify [--address IP ...]  Probe from an independent control machine
+  version | help
+
+Options (before or after COMMAND):
+  --inventory FILE            Default: ansible/inventory/local/hosts.yml
+  --limit PATTERN             Default: mb_ai
+  --image REF                 Override commit-specific GHCR image; digest recommended
+  --ssh-key FILE              A 0600 unencrypted key; otherwise use ssh-agent
+  --known-hosts FILE          Default: ~/.ssh/known_hosts; strict checking is mandatory
+  --vault-password-file FILE  Read-only mount for encrypted inventory sudo secrets
+  --check --diff --ask-become-pass --ask-vault-pass -v ... -vvvv
+Environment equivalents: INFRA_INVENTORY, INFRA_LIMIT, INFRA_RUNNER_IMAGE,
+INFRA_SSH_KEY, INFRA_KNOWN_HOSTS, INFRA_VAULT_PASSWORD_FILE, INFRA_REPORTS_DIR.
+Linux/WSL control machine only. The managed server does not run this CLI or Runner.
+HELP
+}
+die() { echo "[BLOCKED] $*" >&2; exit 2; }
+require_value() { [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"; }
+file_path() {
+  [[ -f "$1" ]] || die "File missing: $1"
+  local parent
+  parent="$(cd -- "$(dirname -- "$1")" && pwd -P)"
+  printf '%s/%s\n' "$parent" "$(basename -- "$1")"
+}
+mount_path() { [[ "$1" != *','* && "$1" != *$'\n'* ]] || die 'Bind-mount paths cannot contain commas or newlines.'; }
+command=''
+inventory="${INFRA_INVENTORY:-ansible/inventory/local/hosts.yml}"
+limit="${INFRA_LIMIT:-mb_ai}"
+image="${INFRA_RUNNER_IMAGE:-}"
+ssh_key="${INFRA_SSH_KEY:-}"
+known_hosts="${INFRA_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
+vault="${INFRA_VAULT_PASSWORD_FILE:-}"
+reports="${INFRA_REPORTS_DIR:-$repo/reports}"
+build=false
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --inventory) require_value "$@"; inventory="$2"; shift 2 ;;
+    --limit) require_value "$@"; limit="$2"; shift 2 ;;
+    --image) require_value "$@"; image="$2"; shift 2 ;;
+    --ssh-key) require_value "$@"; ssh_key="$2"; shift 2 ;;
+    --known-hosts) require_value "$@"; known_hosts="$2"; shift 2 ;;
+    --vault-password-file) require_value "$@"; vault="$2"; shift 2 ;;
+    --build) build=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    --) shift; args+=("$@"); break ;;
+    *) if [[ -z "$command" ]]; then command="$1"; else args+=("$1"); fi; shift ;;
+  esac
+done
+case "$command" in
+  ''|help) usage; exit 0 ;;
+  init|version|external-verify|preflight|check|bootstrap-zero|bootstrap|provision|deploy|infra-deploy|verify|security-check|security-verify|security-apply|tls-bootstrap|tls-check|tls-adopt|migrate|migrate-verify|rollback|legacy-rollback) ;;
+  *) die "Unknown command: $command. Run ./infra help." ;;
+esac
+[[ "$build" == false || "$command" == init ]] || die '--build is supported only with init.'
+[[ -z "$image" || "$build" == false ]] || die 'Choose either --build or --image.'
+command -v docker >/dev/null || die 'Install Docker on the control machine and start its daemon.'
+docker info >/dev/null || die 'The control machine Docker daemon is unavailable.'
+revision="$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)"
+[[ "$revision" =~ ^[a-f0-9]{40}$ ]] || revision=archive
+if [[ -z "$image" && "$command" != init && -f "$repo/.cache/runner-image" ]]; then
+  read -r saved_revision saved_image < "$repo/.cache/runner-image"
+  if [[ "$saved_revision" == "$revision" && "$saved_image" =~ ^sha256:[a-f0-9]{64}$ ]]; then image="$saved_image"; fi
+fi
+if [[ "$build" == true ]]; then
+  image=mb-ai-infra-runner:local
+elif [[ -z "$image" ]]; then
+  [[ "$revision" != archive ]] || die 'For a source archive, pass --image ghcr.io/...@sha256:... (or init --build).'
+  image="ghcr.io/syh-micro-build/mb-ai-infra-runner:sha-$revision"
+fi
+[[ "$image" != -* && "$image" != *[[:space:]]* ]] || die 'Invalid Runner image reference.'
+run=(docker run --rm --init --pull never --read-only --cap-drop ALL
+     --security-opt no-new-privileges --pids-limit 256 --memory 1g
+     --user "$(id -u):$(id -g)" --workdir /workspace
+     --tmpfs '/tmp:rw,nosuid,nodev,mode=1777,size=256m'
+     --tmpfs '/home/runner:rw,nosuid,nodev,mode=1777,size=16m')
+# Named bridges support private test/lab networks; host networking is refused.
+network="${INFRA_DOCKER_NETWORK:-bridge}"
+[[ "$network" != host && "$network" != container:* && "$network" != none ]] || die 'Use a bridge network with outbound SSH access.'
+run+=(--network "$network")
+if [[ -t 0 && -t 1 ]]; then run+=(-it); else run+=(-i); fi
+mount_path "$repo"
+mkdir -p -- "$reports"
+reports="$(cd -- "$reports" && pwd -P)"
+mount_path "$reports"
+run+=(--mount "type=bind,src=$repo,dst=/workspace,readonly" --mount "type=bind,src=$reports,dst=/reports")
+if [[ "$command" != version ]]; then
+  [[ "$inventory" == /* ]] || inventory="$repo/$inventory"
+  inventory="$(file_path "$inventory")"
+  inventory_dir="$(dirname -- "$inventory")"
+  mount_path "$inventory_dir"
+  run+=(--mount "type=bind,src=$inventory_dir,dst=/run/inventory,readonly"
+        --env "INFRA_INVENTORY=/run/inventory/$(basename -- "$inventory")"
+        --env INFRA_SITE=/run/inventory/group_vars/mb_ai.yml --env "INFRA_LIMIT=$limit")
+fi
+if [[ "$command" != version && "$command" != external-verify ]]; then
+  known_hosts="$(file_path "$known_hosts")"
+  [[ -s "$known_hosts" ]] || die 'known_hosts is empty. Verify and add the target fingerprint first.'
+  mount_path "$known_hosts"
+  run+=(--mount "type=bind,src=$known_hosts,dst=/run/infra-ssh/known_hosts,readonly")
+  if [[ -n "$ssh_key" ]]; then
+    ssh_key="$(file_path "$ssh_key")"
+    mount_path "$ssh_key"
+    run+=(--mount "type=bind,src=$ssh_key,dst=/run/infra-ssh/identity,readonly")
+  elif [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
+    mount_path "$SSH_AUTH_SOCK"
+    run+=(--mount "type=bind,src=$SSH_AUTH_SOCK,dst=/run/infra-ssh/agent,readonly" --env SSH_AUTH_SOCK=/run/infra-ssh/agent)
+  else
+    die 'Load your key into ssh-agent or pass --ssh-key FILE.'
+  fi
+  if [[ -n "$vault" ]]; then
+    vault="$(file_path "$vault")"
+    mount_path "$vault"
+    run+=(--mount "type=bind,src=$vault,dst=/run/infra-ssh/vault-password,readonly"
+          --env ANSIBLE_VAULT_PASSWORD_FILE=/run/infra-ssh/vault-password)
+  fi
+fi
+if [[ "$build" == true ]]; then
+  docker build --build-arg "VCS_REF=$revision" -f "$repo/runner/Dockerfile" -t "$image" "$repo"
+elif [[ "$command" == init && "$image" != sha256:* ]] || ! docker image inspect "$image" >/dev/null 2>&1; then
+  [[ "$image" != sha256:* ]] || die 'The pinned local image is missing. Run ./infra init again.'
+  docker pull "$image"
+fi
+image_id="$(docker image inspect --format '{{.Id}}' "$image")"
+[[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || die 'Could not resolve the Runner to an immutable local image ID.'
+if [[ "$command" == init ]]; then
+  "${run[@]}" "$image_id" init "${args[@]}"
+  mkdir -p -- "$repo/.cache"
+  printf '%s %s\n' "$revision" "$image_id" > "$repo/.cache/runner-image.tmp"
+  mv -- "$repo/.cache/runner-image.tmp" "$repo/.cache/runner-image"
+  echo "Runner pinned locally: $image_id"
+  exit 0
+fi
+if [[ "$command" == migrate-verify ]]; then
+  "${run[@]}" "$image_id" verify "${args[@]}"
+  exec "${run[@]}" "$image_id" external-verify
+fi
+exec "${run[@]}" "$image_id" "$command" "${args[@]}"
