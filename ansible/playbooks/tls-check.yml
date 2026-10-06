@@ -1,0 +1,12 @@
+- name: Test existing renewal options against the ACME staging service
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  vars_files: [../vars/defaults.yml]
+  roles: [preflight]
+  tasks:
+    - name: Exercise selected certificate renewal without replacing live certificates
+      ansible.builtin.command:
+        argv: [certbot, renew, --cert-name, "{{ infra_config.domain }}", --dry-run, --run-deploy-hooks]
+      changed_when: false
+      when: not ansible_check_mode

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.cache/
+build/
+reports/
+ansible/inventory/local/
+*.retry
+*.pem
+*.key
+.env
+*.tar.gz

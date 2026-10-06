@@ -1,0 +1,8 @@
+- name: Bootstrap infrastructure
+  ansible.builtin.import_playbook: bootstrap.yml
+- name: Apply security baseline
+  ansible.builtin.import_playbook: security.yml
+- name: Bootstrap or reuse TLS and deploy Edge
+  ansible.builtin.import_playbook: tls.yml
+- name: Verify host and Edge
+  ansible.builtin.import_playbook: verify.yml

@@ -1,0 +1,64 @@
+server {
+    listen 127.0.0.1:{{ infra_config.health_port }};
+    server_name localhost;
+    access_log off;
+    location = /healthz { default_type text/plain; return 200 'ok\n'; }
+    location = /nginx_status { stub_status; allow 127.0.0.1; deny all; }
+    location / { return 404; }
+}
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 444;
+}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ infra_config.domain }};
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        default_type text/plain;
+        try_files $uri =404;
+        limit_except GET HEAD { deny all; }
+    }
+{% if edge_tls_enabled %}
+    location / { return 308 https://{{ infra_config.domain }}$request_uri; }
+{% else %}
+    location / { add_header Retry-After 60 always; return 503; }
+{% endif %}
+}
+{% if edge_tls_enabled %}
+upstream sub2api_backend { server 127.0.0.1:{{ infra_config.contracts[0].upstream.port }}; keepalive 32; }
+upstream docs_backend { server 127.0.0.1:{{ infra_config.contracts[1].upstream.port }}; keepalive 16; }
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name {{ infra_config.domain }};
+    if ($host != '{{ infra_config.domain }}') { return 444; }
+    ssl_certificate /etc/letsencrypt/live/{{ infra_config.domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ infra_config.domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:TLS:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    add_header Strict-Transport-Security 'max-age={{ infra_config.hsts_max_age }}' always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    limit_conn per_ip 1000;
+    limit_conn_status 429;
+    location = /docs { return 308 /docs/; }
+    location ^~ /docs/ {
+        # No URI suffix: preserve /docs/, assets and deep links.
+        proxy_pass http://docs_backend;
+        include /etc/nginx/conf.d/proxy.inc;
+    }
+    location / {
+        proxy_pass http://sub2api_backend;
+        include /etc/nginx/conf.d/proxy.inc;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        gzip off;
+    }
+}
+{% endif %}

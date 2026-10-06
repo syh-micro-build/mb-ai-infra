@@ -1,0 +1,16 @@
+- name: Restore the legacy Edge from a committed migration receipt
+  hosts: mb_ai
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Require an explicit migration receipt
+      ansible.builtin.assert:
+        that:
+          - infra_migration_receipt is defined
+          - infra_migration_receipt is match('^[A-Za-z0-9_-]+\.json$')
+    - name: Stop Infra Edge and restore the recorded legacy restart policy
+      ansible.builtin.command:
+        argv: [python3, /opt/mb-ai-infra/bin/infra.py, legacy-rollback, --receipt, "{{ infra_migration_receipt }}"]
+      changed_when: true
+      when: not ansible_check_mode

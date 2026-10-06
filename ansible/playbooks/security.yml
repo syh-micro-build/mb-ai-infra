@@ -1,0 +1,29 @@
+- name: Apply declared host and Docker security baseline
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  serial: 1
+  vars_files: [../vars/defaults.yml]
+  roles: [preflight, host_safety, tooling, host_hardening, firewall]
+  post_tasks:
+    - name: Finish security handlers before verification
+      ansible.builtin.meta: flush_handlers
+    - name: Verify effective SSH configuration before ending the session
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: security_ssh
+      changed_when: false
+      check_mode: false
+    - name: Require effective key-only non-root SSH policy
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in security_ssh.stdout"
+          - "'kbdinteractiveauthentication no' in security_ssh.stdout"
+          - "'permitrootlogin no' in security_ssh.stdout"
+      when: not ansible_check_mode
+    - name: Reopen a fresh connection after applying SSH and firewall policy
+      ansible.builtin.meta: reset_connection
+      when: not ansible_check_mode
+    - name: Verify new public-key SSH connection
+      ansible.builtin.wait_for_connection:
+        timeout: 30
+      when: not ansible_check_mode

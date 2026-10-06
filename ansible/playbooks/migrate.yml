@@ -1,0 +1,14 @@
+- name: Cut over only an explicitly identified legacy Nginx Edge
+  hosts: mb_ai
+  become: true
+  gather_facts: true
+  serial: 1
+  vars_files: [../vars/defaults.yml]
+  pre_tasks:
+    - name: Require an explicit legacy Edge container
+      ansible.builtin.assert:
+        that: infra_legacy_edge_container | length > 0
+        fail_msg: Inspect the existing Edge and set infra_legacy_edge_container. No container is chosen automatically.
+  roles: [preflight, contract, tooling, edge]
+  vars:
+    edge_migration: true

@@ -1,0 +1,56 @@
+- name: Install host security packages
+  ansible.builtin.apt:
+    name: [ufw, iptables, fail2ban, auditd, unattended-upgrades, openssh-server, curl, openssl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install conservative kernel baseline without changing Docker forwarding
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../security/baseline/60-mb-ai-infra.conf"
+    dest: /etc/sysctl.d/60-mb-ai-infra.conf
+    mode: '0644'
+  notify: Host hardening load sysctl
+
+- name: Install SSH drop-in
+  ansible.builtin.template:
+    src: ssh.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-mb-ai-infra.conf
+    mode: '0644'
+    backup: true
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Host hardening reload ssh
+
+- name: Configure SSH brute-force protection
+  ansible.builtin.template:
+    src: fail2ban.conf.j2
+    dest: /etc/fail2ban/jail.d/mb-ai-infra.local
+    mode: '0644'
+  notify: Host hardening restart fail2ban
+
+- name: Configure infrastructure audit rules
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../security/baseline/audit.rules"
+    dest: /etc/audit/rules.d/mb-ai-infra.rules
+    mode: '0640'
+  notify: Host hardening load audit rules
+
+- name: Configure security-only unattended upgrades without automatic reboot
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../security/baseline/52-mb-ai-infra-upgrades"
+    dest: /etc/apt/apt.conf.d/52-mb-ai-infra-upgrades
+    mode: '0644'
+
+- name: Enable audit and brute-force protection
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [auditd, fail2ban]
+
+- name: Stop only explicitly declared legacy web services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ infra_legacy_services }}"

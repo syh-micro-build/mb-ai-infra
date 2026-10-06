@@ -1,0 +1,11 @@
+infra_site:
+  domain: ai.mbuild.top
+  public_interfaces: [ens18]
+  admin_cidrs: [198.51.100.10/32, '2001:db8::10/128']
+  ssh_port: 22
+infra_certbot_email: ops@example.com
+# Explicit opt-in only, after identifying services which currently own 80/443.
+infra_legacy_services: []
+# Used only by the separate migrate playbook. Use an inspected container ID/name.
+infra_legacy_edge_container: ''
+infra_legacy_edge_project: mb-ai-edge

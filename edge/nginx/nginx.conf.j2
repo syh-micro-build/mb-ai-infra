@@ -1,0 +1,19 @@
+user nginx;
+worker_processes auto;
+pid /var/run/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 4096; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    # Avoid API keys, query strings and request bodies in infrastructure access logs.
+    log_format infra '$remote_addr $request_method $uri $status $body_bytes_sent $request_time';
+    access_log /dev/stdout infra;
+    server_tokens off;
+    sendfile on;
+    keepalive_timeout 65;
+    client_max_body_size {{ infra_config.client_max_body_size }};
+    map $http_upgrade $connection_upgrade { default upgrade; '' ''; }
+    limit_conn_zone $binary_remote_addr zone=per_ip:10m;
+    include /etc/nginx/conf.d/*.conf;
+}

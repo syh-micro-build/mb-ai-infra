@@ -1,0 +1,14 @@
+[Unit]
+Description=MicroBuild AI dual-stack ingress and Docker guard
+DefaultDependencies=no
+After=local-fs.target ufw.service
+Before=network-pre.target docker.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/mb-ai-infra/bin/firewall.py apply --config /etc/mb-ai-infra/config.json
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

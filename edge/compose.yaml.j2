@@ -1,0 +1,55 @@
+name: mb-ai-infra
+services:
+  edge:
+    image: {{ infra_config.nginx_image }}
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    entrypoint: [nginx]
+    command: [-g, 'daemon off;']
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE, SETUID, SETGID, CHOWN, DAC_OVERRIDE, KILL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 512m
+    stop_grace_period: 30s
+    volumes:
+      - type: bind
+        source: {{ release_path }}/nginx/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: {{ release_path }}/nginx/conf.d
+        target: /etc/nginx/conf.d
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: {{ infra_config.tls_root }}
+        target: /etc/letsencrypt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: {{ infra_config.acme_root }}
+        target: /var/www/acme
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /var/cache/nginx:size=64m,mode=0755
+      - /var/run:size=8m,mode=0755
+      - /tmp:size=16m,mode=1777
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, 'http://127.0.0.1:{{ infra_config.health_port }}/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'

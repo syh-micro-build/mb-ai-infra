@@ -1,0 +1,16 @@
+- name: Roll back Edge configuration and image only
+  hosts: mb_ai
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: Require an explicit retained release
+      ansible.builtin.assert:
+        that:
+          - infra_rollback_release is defined
+          - infra_rollback_release is match('^[A-Za-z0-9_.-]+$')
+    - name: Validate and restore the selected Edge release
+      ansible.builtin.command:
+        argv: [python3, /opt/mb-ai-infra/bin/infra.py, rollback, --release, "{{ infra_rollback_release }}"]
+      changed_when: true
+      when: not ansible_check_mode
