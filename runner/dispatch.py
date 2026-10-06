@@ -87,7 +87,7 @@ def inventory_hosts(data):
         if loopback:
             raise ValueError('A managed node must be remote; localhost and loopback destinations are refused.')
         user = values.get('ansible_user', '')
-        if user == 'root' or not re.fullmatch(r'[a-z_][a-z0-9_-]*', user):
+        if not isinstance(user, str) or user == 'root' or not re.fullmatch(r'[a-z_][a-z0-9_-]*', user):
             raise ValueError('Declare a non-root SSH account with sudo as ansible_user.')
         if values.get('ansible_password') or values.get('ansible_ssh_pass'):
             raise ValueError('SSH public-key authentication is required; use Vault for sudo secrets if needed.')

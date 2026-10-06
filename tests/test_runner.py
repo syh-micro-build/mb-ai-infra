@@ -54,7 +54,7 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(dispatch.inventory_hosts(inventory()), {'edge01'})
         for key, value in (('ansible_connection', 'local'), ('ansible_connection', 'docker'),
                            ('ansible_host', '127.0.0.2'), ('ansible_host', '::1'),
-                           ('ansible_host', 'localhost'), ('ansible_user', 'root'),
+                           ('ansible_host', 'localhost'), ('ansible_user', 'root'), ('ansible_user', 1000),
                            ('ansible_password', 'secret'), ('ansible_python_interpreter', '/opt/app/python')):
             data = copy.deepcopy(inventory())
             data['_meta']['hostvars']['edge01'][key] = value

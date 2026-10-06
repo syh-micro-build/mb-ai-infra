@@ -81,6 +81,8 @@ Runner 默认无额外 Linux capability、只读根文件系统、no-new-privile
 
 bootstrap-zero 使用 `gather_facts: false` 和 Ansible raw，通过已有 SSH/sudo 检查发行版及 `/usr/bin/python3`。只在系统 Python/apt bindings 缺失时执行 apt update 和 `apt-get install --no-install-recommends python3 python3-apt`，不执行系统升级、不安装控制端工具链。Ubuntu 22.04 的系统 Python 3.10 与 24.04 的 3.12 可直接使用，不要求目标机升级到控制端 Python 版本。现有解释器就绪时重复执行 changed=0。
 
+新装 Docker 仅请求 Engine/CLI、containerd 与 Compose，禁用推荐依赖，不请求 Buildx 构建插件。既有运行时与应用自行安装的环境不被删除或接管。
+
 preflight 不自动引导 Python。没有 Python 时，preflight / check 明确 BLOCKED，需先显式运行 bootstrap-zero；bootstrap / provision 自动包含该阶段。check mode 无法模拟没有解释器的事实收集，不会报告虚假的完整计划。生产主机仍需 systemd；bootstrap-zero 的 SSH 测试不替代完整主机基线验收。
 
 Runner CI 在 PR/分支构建、扫描并通过 SSH 测试隔离 Ubuntu 22.04/24.04；覆盖无 Python、check/preflight 不变更、Unsupported OS 拒绝、重复执行、agent 与应用目录标记。主机测试在 amd64 上执行。main push 或与 VERSION 匹配的 vX.Y.Z tag 才发布 linux/amd64、linux/arm64 镜像，PR 与手动测试不发布。包写入权限只授予 publish job；无生产密钥或 SSH 自动部署。arm64 镜像在发布时构建，不把它描述为已完成真实主机验收。

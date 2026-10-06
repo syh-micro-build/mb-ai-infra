@@ -50,9 +50,10 @@
 
     - name: Install runtime packages on a new host
       ansible.builtin.apt:
-        name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
         state: present
         update_cache: true
+        install_recommends: false
 
 - name: Enable Docker without restarting a running daemon
   ansible.builtin.systemd_service:
