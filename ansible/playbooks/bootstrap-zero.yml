@@ -1,0 +1,12 @@
+- name: Initialize only the managed-node Ubuntu Python runtime over SSH
+  hosts: mb_ai
+  become: true
+  gather_facts: false
+  serial: 1
+  vars:
+    bootstrap_zero_install: true
+    ansible_python_interpreter: /usr/bin/python3
+  roles: [bootstrap_zero]
+  tasks:
+    - name: Gather facts with the initialized system interpreter
+      ansible.builtin.setup:

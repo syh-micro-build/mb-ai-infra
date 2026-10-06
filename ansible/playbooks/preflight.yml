@@ -1,6 +1,14 @@
 - name: Read-only infrastructure preflight
   hosts: mb_ai
   become: true
-  gather_facts: true
+  gather_facts: false
   vars_files: [../vars/defaults.yml]
+  pre_tasks:
+    - name: Inspect Python over SSH without installing packages
+      ansible.builtin.import_role:
+        name: bootstrap_zero
+      vars:
+        bootstrap_zero_install: false
+    - name: Gather facts only after the read-only Python check
+      ansible.builtin.setup:
   roles: [preflight]

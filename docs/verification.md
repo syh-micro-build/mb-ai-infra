@@ -4,18 +4,22 @@ CI 校验不替代生产主机验收。目标服务器阶段性验证以下事�
 
 | 阶段 | 命令/证据 | 通过条件 |
 |---|---|---|
-| 只读预检 | make preflight；inventory diff | 正确 OS、SSH 端口、全量公网网卡、CIDR、Docker backend |
-| 主机准备 | make bootstrap；docker/compose version | 复用既有 daemon，缺失能力明确阻止，不变更应用 |
-| 加固 | make security-check/apply/verify；sshd -T | 新公钥会话可用，UFW/双栈链/服务正确，未公开应用端口 |
-| 应用契约 | make verify 前的 contract 检查 | 两个回环上游精确响应声明状态 |
-| Edge | make infra-deploy 或 migrate；事务 | compose config/nginx -t/health/TLS/路由通过 |
-| TLS | make tls-check | 单个证书 staging dry-run 和 deploy hook 通过 |
-| 公网 | 独立机器 make external-verify | 每个 A/AAAA 的 80/443 正向检查通过、保护端口不可连接 |
+| 控制端 | ./infra init；固定 image ID | 本地 Inventory/SSH 材料、工具链匹配；不把 init 作为主机通过证据 |
+| 最小引导 | ./infra bootstrap-zero；再次执行 | 缺失时仅系统 Python/python3-apt；重复 changed=0；无控制端工具链 |
+| 只读预检 | ./infra preflight；inventory diff | 正确 OS、SSH 端口、全量公网网卡、CIDR、Docker backend |
+| 主机准备 | ./infra bootstrap；docker/compose version | 复用既有 daemon，缺失能力明确阻止，不变更应用 |
+| 加固 | ./infra security-check；security-apply；security-verify；sshd -T | 新公钥会话可用，UFW/双栈链/服务正确，未公开应用端口 |
+| 应用契约 | ./infra verify 前的 contract 检查 | 两个回环上游精确响应声明状态 |
+| Edge | ./infra deploy 或 migrate；事务 | compose config/nginx -t/health/TLS/路由通过 |
+| TLS | ./infra tls-check | 单个证书 staging dry-run 和 deploy hook 通过 |
+| 公网 | 独立机器 ./infra external-verify | 每个 A/AAAA 的 80/443 正向检查通过、保护端口不可连接 |
 | 幂等 | 再次 security-apply/infra-deploy | 没有额外规则、无需重建相同配置的 Edge、应用不被重启 |
 | 重启恢复 | 人工维护窗口重启；复查服务与公网 | guard 先于 Docker，Edge 恢复，旧 Edge 不争抢端口 |
 | 业务 | 应用 owner 的真实请求、流式、WebSocket、文档深链接 | 业务流量正常，应用发布仍独立 |
 
 本机报告：`/opt/mb-ai-infra/reports/security.json`；事务：`/opt/mb-ai-infra/transactions/*.json`；外部报告：控制端 `reports/external.json`。报告不包含证书私钥或应用环境变量。
+
+Runner CI 额外通过真实 SSH 连接无 Python 的隔离 Ubuntu 22.04/24.04 容器，验证 preflight/check 不安装包、bootstrap-zero 引导和重复 changed=0、公钥与 agent 两种认证，以及目标没有 Ansible/pip/venv/Make/GCC/Git。应用目录使用测试标记确认未被改写。该测试覆盖引导，不替代 systemd 主机基线、真实 ACME 或服务器重启验收。
 
 外部探测先验证 80 的跳转和两个 HTTPS 应用路由，避免把 DNS/网络故障误报为防火墙成功。随后检查契约端口、5432、6379、2375、2376 是否能建立新 TCP 连接。无法连接仅证明从该探测位置不可连接，不证明具体哪一层防火墙阻挡；云规则需与云控制台证据一起验收。本机探测不证明公网封锁，独立机器与双栈覆盖是最终验收的一部分。
 
