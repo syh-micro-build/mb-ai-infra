@@ -33,7 +33,7 @@ if [[ "$mode" == password ]]; then
   echo "::add-mask::$TEST_SUDO_PASSWORD"
   node_env+=(--env TEST_SUDO_PASSWORD)
 fi
-docker build --build-arg "UBUNTU_IMAGE=$base" -f ci/check-node/Dockerfile -t "$node" .
+docker build --build-arg "UBUNTU_IMAGE=$base" -t "$node" ci/check-node
 # Only the disposable SSH target needs systemd/nested Docker privileges, never the Runner.
 docker run -d --name "$node" --network "$network" --network-alias check-node \
   --privileged --cgroupns host --tmpfs /run --tmpfs /run/lock \

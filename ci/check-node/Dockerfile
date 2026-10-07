@@ -27,7 +27,7 @@ RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && printf 'application-owned\n' > /opt/sub2api/sentinel \
     && printf 'application-owned\n' > /opt/mb-ai-docs/sentinel \
     && systemctl enable ssh docker
-COPY --chmod=755 ci/check-node/entrypoint.sh /usr/local/bin/test-systemd
-COPY --chmod=755 ci/check-node/login-shell.sh /usr/local/bin/test-login-shell
+COPY --chmod=755 entrypoint.sh /usr/local/bin/test-systemd
+COPY --chmod=755 login-shell.sh /usr/local/bin/test-login-shell
 STOPSIGNAL SIGRTMIN+3
 ENTRYPOINT ["bash", "/usr/local/bin/test-systemd"]

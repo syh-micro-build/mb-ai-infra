@@ -44,7 +44,6 @@ jobs:
           exit-code: '1'
   check:
     name: Ubuntu ${{ matrix.ubuntu }} full check (${{ matrix.sudo }} sudo)
-    needs: test
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
