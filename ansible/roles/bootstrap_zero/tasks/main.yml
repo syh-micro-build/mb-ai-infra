@@ -63,6 +63,5 @@
     - ansible_check_mode
     - "'MB_AI_APT_READY' not in bootstrap_zero_probe.stdout"
 
-- name: Reset SSH after initializing the system interpreter
+- name: Reset SSH after inspecting or initializing the system interpreter
   ansible.builtin.meta: reset_connection
-  when: "'MB_AI_PYTHON_INSTALLED' in (bootstrap_zero_installation.stdout | default(''))"

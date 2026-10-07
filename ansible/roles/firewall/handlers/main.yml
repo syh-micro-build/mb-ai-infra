@@ -7,6 +7,7 @@
     name: mb-ai-docker-guard
     daemon_reload: true
     state: restarted
+  when: not ansible_check_mode or firewall_guard_unit.stat.exists
 
 - name: Firewall reload systemd
   ansible.builtin.systemd_service:

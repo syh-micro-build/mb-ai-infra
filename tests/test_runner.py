@@ -23,6 +23,19 @@ def inventory():
 
 
 class DispatchTests(unittest.TestCase):
+    def test_interactive_passwords_require_both_terminal_streams(self):
+        for stdin_tty, stdout_tty in ((False, False), (True, False), (False, True)):
+            with self.subTest(stdin=stdin_tty, stdout=stdout_tty):
+                with patch.object(dispatch.sys.stdin, 'isatty', return_value=stdin_tty), \
+                        patch.object(dispatch.sys.stdout, 'isatty', return_value=stdout_tty):
+                    for flag in ('--ask-become-pass', '--ask-vault-pass'):
+                        with self.assertRaisesRegex(ValueError, 'terminal stdin and stdout'):
+                            dispatch.require_prompt_terminal([flag])
+        with patch.object(dispatch.sys.stdin, 'isatty', return_value=True), \
+                patch.object(dispatch.sys.stdout, 'isatty', return_value=True):
+            dispatch.require_prompt_terminal(['--ask-become-pass'])
+        dispatch.require_prompt_terminal(['--check'])
+
     def test_named_recovery_uses_json_argument_without_evaluation(self):
         command, flags, extra = dispatch.invocation(['rollback', '1.0.0-retained', '--check'])
         argv = dispatch.playbook_argv(command, flags, extra, '/run/inventory/hosts.yml', 'edge01')
@@ -157,6 +170,13 @@ if sys.argv[1] == 'run':
         result = self.run_cli('preflight')
         self.assertEqual(result.returncode, 2)
         self.assertFalse(any(call[0] in ('run', 'pull') for call in self.calls()))
+
+    def test_piped_interactive_password_is_blocked_before_docker(self):
+        for flag in ('--ask-become-pass', '--ask-vault-pass'):
+            result = self.run_cli('check', flag)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('Interactive passwords require terminal', result.stderr)
+            self.assertFalse(self.capture.exists())
 
     def test_failed_operation_propagates_and_does_not_pin_failed_init(self):
         self.env['RUN_EXIT'] = '7'

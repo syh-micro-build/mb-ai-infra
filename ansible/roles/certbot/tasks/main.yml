@@ -17,8 +17,19 @@
     dest: /etc/letsencrypt/renewal-hooks/deploy/50-mb-ai-infra
     mode: '0755'
 
+- name: Inspect the renewal timer before a check-mode installation
+  ansible.builtin.stat:
+    path: /lib/systemd/system/certbot.timer
+  register: certbot_timer_unit
+
+- name: Show renewal activation plan when Certbot is not yet installed
+  ansible.builtin.debug:
+    msg: Certbot renewal will be enabled after the package and deploy hook are installed; check mode has not installed them.
+  when: ansible_check_mode and not certbot_timer_unit.stat.exists
+
 - name: Enable automated certificate renewal
   ansible.builtin.systemd_service:
     name: certbot.timer
     enabled: true
     state: started
+  when: not ansible_check_mode or certbot_timer_unit.stat.exists

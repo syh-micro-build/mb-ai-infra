@@ -11,6 +11,7 @@
   ansible.builtin.systemd_service:
     name: fail2ban
     state: restarted
+  when: not ansible_check_mode or ansible_facts.services.get('fail2ban.service', {}).get('status', 'not-found') != 'not-found'
 
 - name: Host hardening load audit rules
   ansible.builtin.command: augenrules --load

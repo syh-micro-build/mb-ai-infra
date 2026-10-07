@@ -3,7 +3,6 @@
   become: true
   gather_facts: true
   serial: 1
-  vars_files: [../vars/defaults.yml]
   roles: [preflight, contract, tooling, certbot]
   tasks:
     - name: Require ACME contact and production issuance policy

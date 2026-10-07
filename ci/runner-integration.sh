@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 runner="${1:-mb-ai-infra-runner:test}"
+sudo_mode="${2:-nopasswd}"
+[[ "$sudo_mode" == nopasswd || "$sudo_mode" == password ]]
+node_env=()
+if [[ "$sudo_mode" == password ]]; then
+  TEST_SUDO_PASSWORD="$(openssl rand -hex 24)"
+  export TEST_SUDO_PASSWORD
+  echo "::add-mask::$TEST_SUDO_PASSWORD"
+  node_env+=(--env TEST_SUDO_PASSWORD)
+fi
+run_infra() {
+  if [[ "$sudo_mode" == password ]]; then
+    python3 ci/ask-become.py ./infra "$@" --ask-become-pass
+  else
+    ./infra "$@"
+  fi
+}
 scratch="$(mktemp -d)"
 chmod 0755 "$scratch"
 prefix="mb-ai-runner-test-$$"
@@ -30,7 +46,7 @@ for version in 22 24; do
   nodes+=("$node")
   docker build --build-arg "UBUNTU_IMAGE=$base" -t "$node" ci/managed-node
   docker run -d --name "$node" --network "$network" --network-alias "node$version" \
-    --mount "type=bind,src=$scratch,dst=/keys,readonly" "$node" >/dev/null
+    --mount "type=bind,src=$scratch,dst=/keys,readonly" "${node_env[@]}" "$node" >/dev/null
   ready=false
   for ((attempt=0; attempt<30; attempt++)); do
     if docker exec "$node" test -s /run/sshd.pid; then ready=true; break; fi
@@ -56,21 +72,21 @@ YAML
   docker exec "$node" sh -c 'test ! -x /usr/bin/python3'
   ./infra init
   printf 'node%s %s\n' "$version" "$(cat "$scratch/identity.pub")" > "$scratch/wrong-known-hosts"
-  if ./infra bootstrap-zero --known-hosts "$scratch/wrong-known-hosts" > "$scratch/host-key.log" 2>&1; then
+  if run_infra bootstrap-zero --known-hosts "$scratch/wrong-known-hosts" > "$scratch/host-key.log" 2>&1; then
     echo 'A mismatched host key was accepted' >&2; exit 1
   fi
   grep -q 'Host key verification failed' "$scratch/host-key.log"
-  if ./infra bootstrap-zero --limit missing-host > "$scratch/limit.log" 2>&1; then
+  if run_infra bootstrap-zero --limit missing-host > "$scratch/limit.log" 2>&1; then
     echo 'An empty host selection was accepted' >&2; exit 1
   fi
   grep -q 'selects no mb_ai hosts' "$scratch/limit.log"
   docker exec "$node" sh -c 'test ! -x /usr/bin/python3'
-  if ./infra preflight > "$scratch/preflight.log" 2>&1; then
+  if run_infra preflight > "$scratch/preflight.log" 2>&1; then
     echo 'Preflight incorrectly passed without Python' >&2; exit 1
   fi
   cat "$scratch/preflight.log"
   grep -q 'System Python is missing' "$scratch/preflight.log"
-  if ./infra bootstrap-zero --check > "$scratch/check.log" 2>&1; then
+  if run_infra bootstrap-zero --check > "$scratch/check.log" 2>&1; then
     echo 'Check mode incorrectly claimed readiness without Python' >&2; exit 1
   fi
   grep -q 'System Python is missing' "$scratch/check.log"
@@ -78,15 +94,15 @@ YAML
   if [[ "$version" == 22 ]]; then
     docker exec "$node" cp /etc/os-release /tmp/original-os
     docker exec "$node" sed -i 's/^ID=.*/ID=debian/' /etc/os-release
-    if ./infra bootstrap-zero > "$scratch/unsupported.log" 2>&1; then
+    if run_infra bootstrap-zero > "$scratch/unsupported.log" 2>&1; then
       echo 'Unsupported OS was accepted' >&2; exit 1
     fi
     grep -q 'Only Ubuntu' "$scratch/unsupported.log"
     docker exec "$node" sh -c 'test ! -x /usr/bin/python3; cp /tmp/original-os /etc/os-release'
   fi
-  ./infra bootstrap-zero
+  run_infra bootstrap-zero
   docker exec "$node" /usr/bin/python3 -c 'import apt,sys; assert sys.version_info >= (3, 9)'
-  ./infra bootstrap-zero | tee "$scratch/repeat.log"
+  run_infra bootstrap-zero | tee "$scratch/repeat.log"
   grep -Eq 'changed=0 .*failed=0' "$scratch/repeat.log"
   for package in ansible ansible-core python3-pip python3-venv make gcc git; do
     state="$(docker exec "$node" dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null || true)"
@@ -98,6 +114,6 @@ done
 eval "$(ssh-agent -s)" >/dev/null
 agent_pid="$SSH_AGENT_PID"
 ssh-add "$scratch/identity"
-INFRA_SSH_KEY='' ./infra bootstrap-zero | tee "$scratch/agent.log"
+INFRA_SSH_KEY='' run_infra bootstrap-zero | tee "$scratch/agent.log"
 grep -Eq 'changed=0 .*failed=0' "$scratch/agent.log"
-echo 'PASS: SSH bootstrap on Ubuntu 22.04/24.04, read-only checks, idempotence, agent and application boundaries.'
+echo "PASS: SSH bootstrap on Ubuntu 22.04/24.04 with $sudo_mode sudo, read-only checks, idempotence, agent and application boundaries."

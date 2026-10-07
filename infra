@@ -72,6 +72,11 @@ case "$command" in
 esac
 [[ "$build" == false || "$command" == init ]] || die '--build is supported only with init.'
 [[ -z "$image" || "$build" == false ]] || die 'Choose either --build or --image.'
+for argument in "${args[@]}"; do
+  if [[ "$argument" == --ask-become-pass || "$argument" == --ask-vault-pass ]]; then
+    [[ -t 0 && -t 1 ]] || die 'Interactive passwords require terminal stdin and stdout. Run directly without pipes/redirection, or use Vault with --vault-password-file.'
+  fi
+done
 command -v docker >/dev/null || die 'Install Docker on the control machine and start its daemon.'
 docker info >/dev/null || die 'The control machine Docker daemon is unavailable.'
 revision="$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)"

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- 修复默认值覆盖 Inventory 的问题，使 ACME 邮箱、签发策略和旧 Edge 迁移参数按站点配置生效。
+
+- 默认关闭 SSH pipelining，保留连接复用，补齐需要密码的 sudo 认证测试。
+- 从不提权的 raw SSH 会话读取实际连接记录，严格校验地址、端口与管理员 CIDR；缺失或畸形时停止安全操作。
+- 移除 reset_connection 不支持的条件判断，修复缺失安全包和 guard unit 时的检查模式依赖。
+- 交互式密码要求真实终端，拒绝管道/重定向；CI 用随机临时密码验证无回显。
+- 完整 check 覆盖 Ubuntu 双版本、两种 sudo 模式、重复计划、主机零配置写入和来源拒绝测试，Runner 发布等待全部校验。
+
 ## 1.0.0 — 2026-10-06
 
 - 增加 Dockerized Infra Runner、统一 ./infra 运维入口、提交镜像固定与只读 SSH 材料挂载，保留 Makefile 开发接口。

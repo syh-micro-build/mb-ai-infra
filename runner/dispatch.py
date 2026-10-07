@@ -155,8 +155,15 @@ def playbook_argv(command, flags, extra, inventory, limit):
     return argv
 
 
+def require_prompt_terminal(flags):
+    if {'--ask-become-pass', '--ask-vault-pass'}.intersection(flags):
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            raise ValueError('Interactive passwords require terminal stdin and stdout; run directly or use a Vault password file.')
+
+
 def main(argv):
     command, flags, extra = invocation(argv)
+    require_prompt_terminal(flags)
     if command == 'version':
         import ansible.release
         import yaml

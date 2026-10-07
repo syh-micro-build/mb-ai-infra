@@ -41,7 +41,7 @@ jobs:
           python3 - <<'PY'
           import os, re
           from pathlib import Path
-          text = Path('ansible/vars/defaults.yml').read_text()
+          text = Path('ansible/roles/preflight/defaults/main.yml').read_text()
           image = re.search(r'^  nginx_image: (nginx:[^\s]+)$', text, re.M).group(1)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('ref=' + image + '\n')
