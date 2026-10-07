@@ -96,9 +96,11 @@ run_infra() {
   fi
 }
 snapshot() { docker exec -i "$node" python3 - < ci/managed-state.py; }
-docker cp ci/fixture.py "$node:/run/contract-fixture.py"
+# Use the shared image filesystem, not a systemd-managed runtime tmpfs.
+docker cp ci/fixture.py "$node:/usr/local/bin/mb-ai-contract-fixture.py"
+docker exec "$node" test -r /usr/local/bin/mb-ai-contract-fixture.py
 docker exec "$node" systemd-run --quiet --unit=mb-ai-contract-fixture \
-  --property=Type=exec /usr/bin/python3 /run/contract-fixture.py
+  --property=Type=exec /usr/bin/python3 /usr/local/bin/mb-ai-contract-fixture.py
 contracts_ready=false
 for ((attempt=0; attempt<30; attempt++)); do
   if docker exec "$node" curl --fail --silent http://127.0.0.1:8080/health >/dev/null \
@@ -135,7 +137,7 @@ fi
 grep -q 'SSH peer is outside admin_cidrs' "$scratch/outside.log"
 site "$subnet"
 for peer_mode in missing malformed; do
-  docker exec "$node" sh -c 'printf "%s\n" "$1" > /run/test-peer-mode' sh "$peer_mode"
+  docker exec "$node" sh -c 'printf "%s\n" "$1" > /etc/mb-ai-test-peer-mode' sh "$peer_mode"
   if run_infra security-apply --check > "$scratch/$peer_mode.log" 2>&1; then
     echo "An invalid SSH session was accepted: $peer_mode" >&2; exit 1
   fi
@@ -145,7 +147,7 @@ for peer_mode in missing malformed; do
     grep -q 'SSH_CONNECTION must contain' "$scratch/$peer_mode.log"
   fi
 done
-docker exec "$node" rm /run/test-peer-mode
+docker exec "$node" rm /etc/mb-ai-test-peer-mode
 snapshot > "$scratch/after.json"
 diff -u "$scratch/before.json" "$scratch/after.json"
 docker exec "$node" sh -c 'test ! -e /opt/mb-ai-infra; test ! -e /etc/mb-ai-infra'
