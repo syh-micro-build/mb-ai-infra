@@ -23,9 +23,10 @@ report_failure() {
   trap - ERR
   for log in "$scratch"/*.log; do
     [[ -f "$log" ]] || continue
-    tail -n 160 "$log"
+    printf 'Failure diagnostics: %s\n' "${log##*/}" >&2
+    tail -n 160 "$log" >&2
   done
-  docker logs --tail 40 "$node" 2>/dev/null || true
+  docker logs --tail 40 "$node" >&2 || true
 }
 trap report_failure ERR
 docker network create "$network" >/dev/null
