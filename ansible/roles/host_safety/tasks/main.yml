@@ -24,8 +24,14 @@
       - host_safety_keys.stat.exists
       - host_safety_keys.stat.size | default(0) > 0
 
-- name: Read the actual connecting peer without sudo
-  ansible.builtin.command: printenv SSH_CONNECTION
+- name: Read the actual connecting peer directly from the SSH session
+  ansible.builtin.raw: |
+    set -eu
+    test -n "${SSH_CONNECTION:-}" || {
+      echo 'SSH_CONNECTION is unavailable in the SSH session' >&2
+      exit 2
+    }
+    printf '%s\n' "$SSH_CONNECTION"
   become: false
   register: host_safety_connection
   changed_when: false
@@ -36,9 +42,7 @@
     argv:
       - python3
       - -c
-      - >-
-        import ipaddress,json,sys; d=json.load(sys.stdin); p=ipaddress.ip_address(d['peer']);
-        assert any(p in ipaddress.ip_network(c, strict=False) for c in d['cidrs']), 'SSH peer is outside admin_cidrs'
-    stdin: "{{ {'peer': host_safety_connection.stdout.split()[0], 'cidrs': infra_config.admin_cidrs} | to_json }}"
+      - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../scripts/ssh_peer.py') }}"
+    stdin: "{{ {'connection': host_safety_connection.stdout, 'cidrs': infra_config.admin_cidrs} | to_json }}"
   changed_when: false
   check_mode: false

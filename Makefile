@@ -23,7 +23,7 @@ test:
 lint:
 	yamllint .
 	ansible-lint
-	shellcheck infra runner/*.sh scripts/*.sh ci/*.sh ci/managed-node/*.sh
+	shellcheck infra runner/*.sh scripts/*.sh ci/*.sh ci/managed-node/*.sh ci/check-node/*.sh
 validate: test render lint
 	@for file in ansible/playbooks/*.yml; do ansible-playbook -i ansible/inventory/example/hosts.yml --syntax-check "$$file"; done
 preflight:
@@ -65,3 +65,5 @@ runner-build:
 	docker build --build-arg VCS_REF="$$(git rev-parse HEAD)" -t mb-ai-infra-runner:test -f runner/Dockerfile .
 runner-test: runner-build
 	bash ci/runner-integration.sh mb-ai-infra-runner:test
+	bash ci/runner-integration.sh mb-ai-infra-runner:test password
+	@for version in 22 24; do for mode in password nopasswd; do bash ci/check-integration.sh mb-ai-infra-runner:test "$$version" "$$mode" || exit $$?; done; done

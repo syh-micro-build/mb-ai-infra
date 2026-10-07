@@ -37,6 +37,8 @@ export INFRA_SSH_KEY="$HOME/.ssh/infra_ed25519"
 
 填写真实主机、非 root sudo 账号、SSH 端口、公网网卡、管理员 IPv4/IPv6 CIDR、域名和 ACME 邮箱。主机密钥检查始终开启，不自动信任未知指纹。加密私钥先加入 SSH agent 并取消 INFRA_SSH_KEY，其他凭据使用 Vault。`local/` 被 Git 忽略。init 只校验控制环境，不连接目标。
 
+sudo 需要密码时，对实际连接命令添加 `--ask-become-pass`，例如 `./infra check --ask-become-pass`；在终端直接运行，不接管道或重定向。也可在加密 Inventory 中提供 sudo 凭据，无需把生产账号改成免密码 sudo。SSH pipelining 默认关闭，连接复用仍保留。详见 [Runner/CLI](docs/runner.md)。
+
 Runner 默认使用当前完整提交的 GHCR 镜像，main 合并后 CI 发布。PR 分支或发布前可用 `./infra init --build` 在控制端构建；后续命令复用固定本地 image ID。源代码包或指定摘要使用 `--image <ref或digest>`。详见 [Runner/CLI](docs/runner.md)。
 
 新主机：先配置云防火墙、验证管理账号，再按应用各自流程部署两个应用，使契约可用，最后执行 `./infra provision`。该命令准备主机、安全基线、HTTP-01/TLS、Edge 和本机验证，不安装应用。DNS 的 A/AAAA 必须指向目标主机，公网 80 必须可达。完整外部验收仍需从另一台机器执行 `./infra external-verify`。
@@ -48,7 +50,7 @@ Runner 默认使用当前完整提交的 GHCR 镜像，main 合并后 CI 发布�
 | `./infra init [--build]` | 准备并固定控制端 Runner，验证本地 Inventory/SSH 材料 |
 | `./infra bootstrap-zero` | 仅引导缺失的系统 Python 与 python3-apt；bootstrap/provision 自动包含 |
 | `./infra preflight` | 只读检查 OS、接口、SSH 端口、配置和 Docker backend |
-| `./infra check` | Ansible `--check --diff`，展示计划；新主机缺失依赖时需先分阶段 bootstrap |
+| `./infra check` | Ansible `--check --diff`，展示计划；缺失的安全服务只展示安装与启用计划，不执行签发、部署或健康验收 |
 | `./infra bootstrap` | 安装缺失的运行时、Infra 工具与 Certbot；复用现有 Docker |
 | `./infra security-check` / `security-verify` | 只读安全审计；需要先 bootstrap 安装审计工具 |
 | `./infra security-apply` | SSH、UFW、双栈 INPUT/DOCKER-USER、Fail2ban、审计、内核及安全更新 |

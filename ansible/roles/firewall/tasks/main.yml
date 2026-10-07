@@ -12,41 +12,56 @@
     name: [ufw, iptables]
     state: present
 
-- name: Enable UFW IPv6 support
-  ansible.builtin.lineinfile:
-    path: /etc/default/ufw
-    regexp: '^IPV6='
-    line: IPV6=yes
-  notify: Firewall reload ufw
+- name: Inspect UFW before a check-mode package installation
+  ansible.builtin.stat:
+    path: /usr/sbin/ufw
+  register: firewall_ufw_cli
 
-- name: Allow declared administrators before enabling deny policy
-  community.general.ufw:
-    rule: allow
-    port: "{{ infra_config.ssh_port }}"
-    proto: tcp
-    from_ip: "{{ item }}"
-  loop: "{{ infra_config.admin_cidrs }}"
+- name: Show firewall plan when UFW is not yet installed
+  ansible.builtin.debug:
+    msg:
+      - "UFW will allow SSH {{ infra_config.ssh_port }} from {{ infra_config.admin_cidrs }} and public TCP {{ infra_config.public_tcp_ports }}."
+      - UFW will enable IPv6, deny other incoming traffic and allow egress after installation; check mode has not installed UFW or applied rules.
+  when: ansible_check_mode and not firewall_ufw_cli.stat.exists
 
-- name: Allow public Edge TCP ports
-  community.general.ufw:
-    rule: allow
-    port: "{{ item }}"
-    proto: tcp
-  loop: "{{ infra_config.public_tcp_ports }}"
+- name: Configure the available UFW runtime or plan
+  when: not ansible_check_mode or firewall_ufw_cli.stat.exists
+  block:
+    - name: Enable UFW IPv6 support
+      ansible.builtin.lineinfile:
+        path: /etc/default/ufw
+        regexp: '^IPV6='
+        line: IPV6=yes
+      notify: Firewall reload ufw
 
-- name: Default deny incoming host traffic
-  community.general.ufw:
-    direction: incoming
-    default: deny
+    - name: Allow declared administrators before enabling deny policy
+      community.general.ufw:
+        rule: allow
+        port: "{{ infra_config.ssh_port }}"
+        proto: tcp
+        from_ip: "{{ item }}"
+      loop: "{{ infra_config.admin_cidrs }}"
 
-- name: Preserve normal host egress
-  community.general.ufw:
-    direction: outgoing
-    default: allow
+    - name: Allow public Edge TCP ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ infra_config.public_tcp_ports }}"
 
-- name: Enable host firewall after SSH allow rules
-  community.general.ufw:
-    state: enabled
+    - name: Default deny incoming host traffic
+      community.general.ufw:
+        direction: incoming
+        default: deny
+
+    - name: Preserve normal host egress
+      community.general.ufw:
+        direction: outgoing
+        default: allow
+
+    - name: Enable host firewall after SSH allow rules
+      community.general.ufw:
+        state: enabled
 
 - name: Install persistent Docker and host ingress guard
   ansible.builtin.copy:
@@ -68,12 +83,23 @@
     mode: '0644'
   notify: Firewall reload systemd
 
+- name: Inspect the guard unit before a check-mode installation
+  ansible.builtin.stat:
+    path: /etc/systemd/system/mb-ai-docker-guard.service
+  register: firewall_guard_unit
+
+- name: Show activation plan for a guard that is not yet installed
+  ansible.builtin.debug:
+    msg: The new guard will be enabled and started after its unit and runtime files are installed; check mode has not installed them.
+  when: ansible_check_mode and not firewall_guard_unit.stat.exists
+
 - name: Enable guard without restarting Docker or applications
   ansible.builtin.systemd_service:
     name: mb-ai-docker-guard
     daemon_reload: true
     enabled: true
     state: started
+  when: not ansible_check_mode or firewall_guard_unit.stat.exists
 
 - name: Apply updated declared policy to owned chains
   ansible.builtin.command: python3 /opt/mb-ai-infra/bin/firewall.py apply --config /etc/mb-ai-infra/config.json

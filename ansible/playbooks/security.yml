@@ -20,9 +20,8 @@
           - "'kbdinteractiveauthentication no' in security_ssh.stdout"
           - "'permitrootlogin no' in security_ssh.stdout"
       when: not ansible_check_mode
-    - name: Reopen a fresh connection after applying SSH and firewall policy
+    - name: Reset SSH after inspecting or applying SSH and firewall policy
       ansible.builtin.meta: reset_connection
-      when: not ansible_check_mode
     - name: Verify new public-key SSH connection
       ansible.builtin.wait_for_connection:
         timeout: 30

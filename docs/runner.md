@@ -88,3 +88,15 @@ preflight 不自动引导 Python。没有 Python 时，preflight / check 明确 
 Runner CI 在 PR/分支构建、扫描并通过 SSH 测试隔离 Ubuntu 22.04/24.04；覆盖无 Python、check/preflight 不变更、Unsupported OS 拒绝、重复执行、agent 与应用目录标记。主机测试在 amd64 上执行。main push 或与 VERSION 匹配的 vX.Y.Z tag 才发布 linux/amd64、linux/arm64 镜像，PR 与手动测试不发布。包写入权限只授予 publish job；无生产密钥或 SSH 自动部署。arm64 镜像在发布时构建，不把它描述为已完成真实主机验收。
 
 发布包括完整提交 tag、main tag；版本 tag 仅在显式打 release tag 时创建，不自动覆盖版本。运维默认使用提交 tag，不使用 main 作为版本依据。Runner 发布不部署 Edge、不修改应用版本，不自动创建 release/tag。
+
+## 密码 sudo、SSH 来源检查与计划模式
+
+公钥 SSH 和 sudo 提权分别认证。生产账号可以保留需要密码的 sudo，使用 `./infra preflight --ask-become-pass`、`./infra check --ask-become-pass` 等实际连接命令；`init` 不要求 sudo 密码。交互式命令必须同时保留 stdin/stdout 的终端属性，CLI 和 Runner 都会拒绝管道、重定向或非终端输入，避免 getpass 回显密码。不要把交互式命令接到 tee。无人值守执行使用加密 Inventory 与 `--vault-password-file`，不要把真实密码写在命令行、明文 Inventory 或日志中。
+
+仓库默认 `pipelining = False`，保留 `ControlMaster/ControlPersist` 连接复用。此默认用于兼容需要密码的 sudo；Inventory 中已有的 `ansible_pipelining: true` 仍会覆盖它，重新验收时应移除临时覆盖或显式关闭。不能把一次关闭 pipelining 的局部通过当成完整提权流程已验证。
+
+`host_safety` 从不提权的 raw SSH 会话读取 `SSH_CONNECTION`，严格验证四字段连接记录、IP、端口，以及实际客户端是否位于 `admin_cidrs`。缺失、格式错误或来源不在允许范围内都会停止安全基线操作，不通过设置假的来源地址跳过检查。会话环境读取方式见 [Ansible raw 文档](https://docs.ansible.com/projects/ansible-core/stable-2.21/collections/ansible/builtin/raw_module.html)；pipelining 与提权的兼容性限制见 [SSH 插件文档](https://docs.ansible.com/projects/ansible-core/stable-2.21/collections/ansible/builtin/ssh_connection.html)。
+
+`check` 的 `changed` 是预计变化，不表示已经部署。系统 Python 存在、应用契约可用时，即使 Infra 目录、Certbot/UFW/Fail2ban/auditd 或 guard unit 尚未安装，也应展示文件、包和服务的计划；不会尝试启动尚不存在的服务或调用尚未安装的 UFW。已有依赖仍执行适用的检查。签发证书、激活 Edge、服务健康和安全验收在计划模式跳过，完整计划通过不等于实际部署通过。没有 Python、契约不通或主机条件不满足仍明确失败。缺失 Docker 时仍按独立运行时安装计划分阶段验证，不把包安装后才能执行的检查当成已经通过。
+
+CI 同时覆盖需要密码与免密码 sudo 的 bootstrap-zero。完整 `./infra check` 的矩阵为 Ubuntu 22.04/24.04 × 两种 sudo 模式，目标运行真实 SSH、systemd 与隔离 Docker daemon，保留缺失的 Infra 目录和安全包。密码路径通过真实 PTY 输入随机、临时测试密码并检查未回显；测试连续两次计划，比较包、服务状态、规则和主机/应用文件快照，并验证 CIDR 不匹配、会话记录缺失或畸形时拒绝操作。只有一次性的 CI 目标为运行 systemd/nested Docker 获得额外权限，Runner 保持原有权限限制。GHCR 发布等待全部矩阵通过；不访问生产主机。
