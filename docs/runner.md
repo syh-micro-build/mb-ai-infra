@@ -91,6 +91,8 @@ Runner CI 在 PR/分支构建、扫描并通过 SSH 测试隔离 Ubuntu 22.04/24
 
 ## 密码 sudo、SSH 来源检查与计划模式
 
+包安装计划需要 Ubuntu 软件源索引中存在候选版本，check 不刷新缺失的索引或安装包。完整计划测试的目标镜像预先保留这些索引。systemd 可能列出尚未安装的服务，角色按 [service_facts 的状态](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/service_facts_module.html#examples) 排除 `not-found`，避免在计划阶段启用不存在的服务。
+
 公钥 SSH 和 sudo 提权分别认证。生产账号可以保留需要密码的 sudo，使用 `./infra preflight --ask-become-pass`、`./infra check --ask-become-pass` 等实际连接命令；`init` 不要求 sudo 密码。交互式命令必须同时保留 stdin/stdout 的终端属性，CLI 和 Runner 都会拒绝管道、重定向或非终端输入，避免 getpass 回显密码。不要把交互式命令接到 tee。无人值守执行使用加密 Inventory 与 `--vault-password-file`，不要把真实密码写在命令行、明文 Inventory 或日志中。
 
 仓库默认 `pipelining = False`，保留 `ControlMaster/ControlPersist` 连接复用。此默认用于兼容需要密码的 sudo；Inventory 中已有的 `ansible_pipelining: true` 仍会覆盖它，重新验收时应移除临时覆盖或显式关闭。不能把一次关闭 pipelining 的局部通过当成完整提权流程已验证。

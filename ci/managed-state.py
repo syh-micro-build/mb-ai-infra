@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 paths = [
@@ -41,5 +42,10 @@ for unit in ('ssh', 'docker', 'certbot.timer', 'fail2ban', 'auditd', 'mb-ai-dock
     result = subprocess.run(['systemctl', 'show', unit, '-p', 'ActiveState', '-p', 'UnitFileState'],
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=False)
     services[unit] = result.stdout
-rules = {command: subprocess.check_output([command], text=True) for command in ('iptables-save', 'ip6tables-save')}
+rules = {}
+for command in ('iptables-save', 'ip6tables-save'):
+    output = subprocess.check_output([command], text=True)
+    # Traffic counters and export timestamps change during SSH; compare policy.
+    rules[command] = '\n'.join(re.sub(r'\[\d+:\d+\]', '[0:0]', line)
+                               for line in output.splitlines() if not line.startswith('#'))
 print(json.dumps({'files': files, 'packages': sorted(packages.splitlines()), 'services': services, 'rules': rules}, sort_keys=True, indent=2))
