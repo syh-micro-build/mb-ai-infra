@@ -2,7 +2,6 @@
   hosts: mb_ai
   become: true
   gather_facts: true
-  vars_files: [../vars/defaults.yml]
   roles: [preflight]
   tasks:
     - name: Audit installed policy without applying fixes

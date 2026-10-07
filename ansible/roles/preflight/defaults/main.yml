@@ -1,0 +1,21 @@
+# Shared infrastructure inputs use role defaults so Inventory wins precedence.
+infra_defaults:  # noqa: var-naming[no-role-prefix]
+  domain: ai.example.com
+  nginx_image: nginx:stable-trixie@sha256:0623fd2455fb2bb0bc2ba7038817adcf7805d0790f78af91de33389d50774385
+  public_interfaces: []
+  admin_cidrs: []
+  ssh_port: 22
+  public_tcp_ports: [80, 443]
+  health_port: 18080
+  tls_root: /etc/letsencrypt
+  acme_root: /var/lib/mb-ai-infra/acme
+  client_max_body_size: 64m
+  hsts_max_age: 86400
+  certificate_min_days: 7
+infra_root: /opt/mb-ai-infra  # noqa: var-naming[no-role-prefix]
+infra_certbot_email: ''  # noqa: var-naming[no-role-prefix]
+infra_certbot_staging: false  # noqa: var-naming[no-role-prefix]
+infra_legacy_services: []  # noqa: var-naming[no-role-prefix]
+infra_legacy_edge_container: ''  # noqa: var-naming[no-role-prefix]
+infra_legacy_edge_project: mb-ai-edge  # noqa: var-naming[no-role-prefix]
+infra_legacy_edge_dir: /opt/mb-ai-edge  # noqa: var-naming[no-role-prefix]

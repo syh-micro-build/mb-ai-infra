@@ -2,7 +2,6 @@
   hosts: mb_ai
   become: true
   gather_facts: false
-  vars_files: [../vars/defaults.yml]
   pre_tasks:
     - name: Inspect Python over SSH without installing packages
       ansible.builtin.import_role:

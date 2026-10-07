@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 def load_config(site):
-    config = yaml.safe_load((REPO / 'ansible/vars/defaults.yml').read_text())['infra_defaults']
+    config = yaml.safe_load((REPO / 'ansible/roles/preflight/defaults/main.yml').read_text())['infra_defaults']
     config.update(yaml.safe_load(Path(site).read_text()).get('infra_site', {}))
     config['contracts'] = [yaml.safe_load((REPO / f'contracts/{name}.yml').read_text()) for name in ('sub2api', 'docs')]
     validate_config(config)

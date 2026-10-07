@@ -3,7 +3,6 @@
   become: true
   gather_facts: true
   serial: 1
-  vars_files: [../vars/defaults.yml]
   pre_tasks:
     - name: Require an explicit legacy Edge container
       ansible.builtin.assert:

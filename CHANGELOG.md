@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 修复默认值覆盖 Inventory 的问题，使 ACME 邮箱、签发策略和旧 Edge 迁移参数按站点配置生效。
+
 - 默认关闭 SSH pipelining，保留连接复用，补齐需要密码的 sudo 认证测试。
 - 从不提权的 raw SSH 会话读取实际连接记录，严格校验地址、端口与管理员 CIDR；缺失或畸形时停止安全操作。
 - 移除 reset_connection 不支持的条件判断，修复缺失安全包和 guard unit 时的检查模式依赖。
