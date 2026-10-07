@@ -42,4 +42,4 @@ for unit in ('ssh', 'docker', 'certbot.timer', 'fail2ban', 'auditd', 'mb-ai-dock
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=False)
     services[unit] = result.stdout
 rules = {command: subprocess.check_output([command], text=True) for command in ('iptables-save', 'ip6tables-save')}
-print(json.dumps({'files': files, 'packages': sorted(packages.splitlines()), 'services': services, 'rules': rules}, sort_keys=True))
+print(json.dumps({'files': files, 'packages': sorted(packages.splitlines()), 'services': services, 'rules': rules}, sort_keys=True, indent=2))

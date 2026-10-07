@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 runner="${1:-mb-ai-infra-runner:test}"
 version="${2:-22}"
 mode="${3:-password}"
@@ -19,6 +19,15 @@ cleanup() {
   rm -rf -- "$scratch"
 }
 trap cleanup EXIT
+report_failure() {
+  trap - ERR
+  for log in "$scratch"/*.log; do
+    [[ -f "$log" ]] || continue
+    tail -n 160 "$log"
+  done
+  docker logs --tail 40 "$node" 2>/dev/null || true
+}
+trap report_failure ERR
 docker network create "$network" >/dev/null
 subnet="$(docker network inspect --format '{{(index .IPAM.Config 0).Subnet}}' "$network")"
 ssh-keygen -q -t ed25519 -N '' -f "$scratch/identity"
