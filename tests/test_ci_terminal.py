@@ -15,7 +15,7 @@ class TerminalDriverTests(unittest.TestCase):
         code = (
             "import getpass,os,sys; assert sys.stdin.isatty() and sys.stdout.isatty(); "
             "p=getpass.getpass('BECOME password: '); assert p==os.environ['TEST_SUDO_PASSWORD']; "
-            + ("print(p)" if leak else "print('PASS interactive password fixture')")
+            + ("print(p)" if leak else "print('\\x1b[32mPASS interactive password fixture\\x1b[0m')")
         )
         result = subprocess.run([sys.executable, str(DRIVER), sys.executable, '-c', code],
                                 env=dict(os.environ, TEST_SUDO_PASSWORD=password), text=True,
@@ -28,6 +28,7 @@ class TerminalDriverTests(unittest.TestCase):
         self.assertIn('PASS interactive password fixture', result.stdout)
         self.assertNotIn(password, result.stdout + result.stderr)
         self.assertNotIn('GetPassWarning', result.stdout + result.stderr)
+        self.assertNotIn('\x1b', result.stdout)
 
     def test_accidental_secret_output_is_redacted_and_fails_the_test(self):
         password, result = self.run_prompt(leak=True)

@@ -3,6 +3,7 @@
 ARG UBUNTU_IMAGE=ubuntu:22.04@sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401
 FROM ${UBUNTU_IMAGE}
 ENV container=docker
+# Keep apt indexes so read-only plans can resolve candidates without apt updates.
 RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && chmod 0755 /usr/sbin/policy-rc.d \
     && apt-get update \
@@ -17,7 +18,6 @@ RUN printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
        docker-ce docker-ce-cli containerd.io docker-compose-plugin \
-    && rm -rf /var/lib/apt/lists/* \
     && rm /usr/sbin/policy-rc.d \
     && useradd --create-home --shell /usr/local/bin/test-login-shell deploy \
     && printf 'deploy ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/deploy \

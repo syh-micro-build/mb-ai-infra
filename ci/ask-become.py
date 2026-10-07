@@ -2,6 +2,7 @@
 import errno
 import os
 import pty
+import re
 import select
 import subprocess
 import sys
@@ -43,7 +44,10 @@ def main():
                 break
         result = process.wait(timeout=10)
         leaked = password in output
-        sys.stdout.buffer.write(bytes(output).replace(password, b'[REDACTED]'))
+        log = bytes(output).replace(password, b'[REDACTED]')
+        # PTY output has Ansible color codes; normalize only the captured CI log.
+        log = re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', log)
+        sys.stdout.buffer.write(log)
         if leaked or (result == 0 and not sent):
             raise RuntimeError('Password prompt was not exercised safely')
         return result
