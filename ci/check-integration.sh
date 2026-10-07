@@ -97,11 +97,22 @@ run_infra() {
 }
 snapshot() { docker exec -i "$node" python3 - < ci/managed-state.py; }
 docker cp ci/fixture.py "$node:/run/contract-fixture.py"
-docker exec -d "$node" python3 /run/contract-fixture.py
+docker exec "$node" systemd-run --quiet --unit=mb-ai-contract-fixture \
+  --property=Type=exec /usr/bin/python3 /run/contract-fixture.py
+contracts_ready=false
 for ((attempt=0; attempt<30; attempt++)); do
-  if docker exec "$node" curl --fail --silent http://127.0.0.1:8081/docs/ >/dev/null; then break; fi
+  if docker exec "$node" curl --fail --silent http://127.0.0.1:8080/health >/dev/null \
+     && docker exec "$node" curl --fail --silent http://127.0.0.1:8081/docs/ >/dev/null; then
+    contracts_ready=true
+    break
+  fi
   sleep 1
 done
+if [[ "$contracts_ready" != true ]]; then
+  docker exec "$node" journalctl -u mb-ai-contract-fixture --no-pager >&2 || true
+  echo 'Synthetic application contracts did not become ready' >&2
+  exit 1
+fi
 docker exec "$node" sh -c 'test ! -e /opt/mb-ai-infra; test ! -e /etc/mb-ai-infra'
 ./infra init
 run_infra preflight > "$scratch/preflight.log"
