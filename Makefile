@@ -25,7 +25,7 @@ lint:
 	ansible-lint
 	shellcheck infra runner/*.sh scripts/*.sh ci/*.sh ci/managed-node/*.sh ci/check-node/*.sh
 validate: test render lint
-	@for file in ansible/playbooks/*.yml; do ansible-playbook -i ansible/inventory/example/hosts.yml --syntax-check "$$file"; done
+	@for file in ansible/playbooks/*.yml ci/ssh-peer-context.yml; do ansible-playbook -i ansible/inventory/example/hosts.yml --syntax-check "$$file"; done
 preflight:
 	$(RUN) preflight
 check:

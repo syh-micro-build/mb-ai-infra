@@ -30,4 +30,6 @@ CI 的实际 Linux 测试：两模式 Nginx 配置、Compose config、可信测�
 
 完整计划测试另覆盖 Ubuntu 22.04/24.04 与密码 sudo/免密码 sudo 四种组合。目标具备系统 Python、真实 systemd 和已有 Docker，但尚无 Infra 目录和安全包；应用只用黑盒 HTTP fixture 表示。两次 check 要求 `unreachable=0`、`failed=0`，主机包、服务状态、规则、管理配置和应用目录快照保持一致。读取不到真实 SSH 来源、连接记录不合法或来源不在 `admin_cidrs` 时必须失败。密码使用随机测试值，经真实终端交互且验证未回显。该证据不替代生产上的真实应用、ACME、云网络与变更后的服务验证。
 
+每个组合在 host 和 group 两种 Inventory 位置分别开启 `ansible_become: true` 并重复两次完整 check。CI 先验证未修复的关键字优先级会导致 sudo 清除会话变量；正式角色必须保持 SSH 登录身份读取来源，其他任务仍可提权，包、规则和主机/应用配置快照不变。
+
 修复合并后，在控制端更新正式 checkout 并重新 `./infra init`，等待对应完整提交的 Runner 发布；发布前可 `./infra init --build`。使用正式 Inventory 删除临时的诊断覆盖后，直接执行 `./infra preflight --ask-become-pass` 和 `./infra check --ask-become-pass`，不接管道或重定向。只有完整计划通过、变更经审阅后才进入原有服务器部署步骤。

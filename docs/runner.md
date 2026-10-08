@@ -101,6 +101,10 @@ Runner CI 在 PR/分支构建、扫描并通过 SSH 测试隔离 Ubuntu 22.04/24
 
 `host_safety` 从不提权的 raw SSH 会话读取 `SSH_CONNECTION`，严格验证四字段连接记录、IP、端口，以及实际客户端是否位于 `admin_cidrs`。缺失、格式错误或来源不在允许范围内都会停止安全基线操作，不通过设置假的来源地址跳过检查。会话环境读取方式见 [Ansible raw 文档](https://docs.ansible.com/projects/ansible-core/stable-2.21/collections/ansible/builtin/raw_module.html)；pipelining 与提权的兼容性限制见 [SSH 插件文档](https://docs.ansible.com/projects/ansible-core/stable-2.21/collections/ansible/builtin/ssh_connection.html)。
 
+Inventory 可以保留示例中的 `ansible_become: true`，无论它位于 host 还是 group。该连接变量会覆盖任务的 `become: false` 关键字，因此来源读取任务同时以任务变量 `ansible_become: false` 关闭提权，并检查执行身份等于 SSH 登录用户。其他任务继续按原配置使用 sudo；无需修改服务器的 sudo 环境保留策略。机制见 [Ansible 提权连接变量](https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_privilege_escalation.html#become-connection-variables)。开发者若通过更高优先级变量强制该任务提权，身份检查会明确拒绝操作。
+
 `check` 的 `changed` 是预计变化，不表示已经部署。系统 Python 存在、应用契约可用时，即使 Infra 目录、Certbot/UFW/Fail2ban/auditd 或 guard unit 尚未安装，也应展示文件、包和服务的计划；不会尝试启动尚不存在的服务或调用尚未安装的 UFW。已有依赖仍执行适用的检查。签发证书、激活 Edge、服务健康和安全验收在计划模式跳过，完整计划通过不等于实际部署通过。没有 Python、契约不通或主机条件不满足仍明确失败。缺失 Docker 时仍按独立运行时安装计划分阶段验证，不把包安装后才能执行的检查当成已经通过。
 
 CI 同时覆盖需要密码与免密码 sudo 的 bootstrap-zero。完整 `./infra check` 的矩阵为 Ubuntu 22.04/24.04 × 两种 sudo 模式，目标运行真实 SSH、systemd 与隔离 Docker daemon，保留缺失的 Infra 目录和安全包。密码路径通过真实 PTY 输入随机、临时测试密码并检查未回显；测试连续两次计划，比较包、服务状态、规则和主机/应用文件快照，并验证 CIDR 不匹配、会话记录缺失或畸形时拒绝操作。只有一次性的 CI 目标为运行 systemd/nested Docker 获得额外权限，Runner 保持原有权限限制。GHCR 发布等待全部矩阵通过；不访问生产主机。
+
+每个完整计划组合分别测试 host 与 group 中的 `ansible_become: true`，各连续执行两次 check。独立只读探针先验证仅设置 `become: false` 时仍会以 root 执行且 sudo 清除 `SSH_CONNECTION`，再要求真正的 host_safety 来源校验通过。此测试复现真实变量优先级，不把删除 Inventory 提权设置作为通过条件。

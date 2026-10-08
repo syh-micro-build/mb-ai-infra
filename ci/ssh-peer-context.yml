@@ -1,0 +1,17 @@
+- name: Verify the Inventory become precedence and sudo environment fixture
+  hosts: mb_ai
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Require sudo to override a keyword-only opt-out and clear the SSH session
+      ansible.builtin.raw: |
+        set -eu
+        test "$(id -u)" -eq 0
+        test -z "${SSH_CONNECTION:-}"
+      become: false
+      changed_when: false
+      check_mode: false
+
+    - name: Report the verified Inventory precedence and sudo environment
+      ansible.builtin.debug:
+        msg: 'PASS: Inventory become overrides the task keyword; sudo clears SSH_CONNECTION.'

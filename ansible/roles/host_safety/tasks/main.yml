@@ -27,12 +27,19 @@
 - name: Read the actual connecting peer directly from the SSH session
   ansible.builtin.raw: |
     set -eu
+    test "$(id -un)" = {{ ansible_user | quote }} || {
+      echo 'SSH peer inspection must run as the SSH login user' >&2
+      exit 2
+    }
     test -n "${SSH_CONNECTION:-}" || {
       echo 'SSH_CONNECTION is unavailable in the SSH session' >&2
       exit 2
     }
     printf '%s\n' "$SSH_CONNECTION"
   become: false
+  vars:
+    # Inventory connection variables override the become keyword.
+    ansible_become: false
   register: host_safety_connection
   changed_when: false
   check_mode: false

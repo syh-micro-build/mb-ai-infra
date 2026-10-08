@@ -64,7 +64,9 @@ if [[ "$mode" == password ]] && docker exec --user deploy "$node" sudo -n true 2
 fi
 printf 'check-node %s\n' "$(docker exec "$node" ssh-keygen -y -f /etc/ssh/ssh_host_ed25519_key)" > "$scratch/known_hosts"
 mkdir -p "$scratch/inventory/group_vars"
-cat > "$scratch/inventory/hosts.yml" <<'YAML'
+inventory() {
+  local scope="$1"
+  cat > "$scratch/inventory/hosts.yml" <<'YAML'
 all:
   children:
     mb_ai:
@@ -75,6 +77,11 @@ all:
           ansible_connection: ssh
           ansible_python_interpreter: /usr/bin/python3
 YAML
+  if [[ "$scope" == host ]]; then
+    printf '          ansible_become: true\n' >> "$scratch/inventory/hosts.yml"
+  fi
+}
+inventory host
 site() {
   cat > "$scratch/inventory/group_vars/mb_ai.yml" <<YAML
 infra_site:
@@ -85,6 +92,9 @@ infra_site:
 infra_certbot_email: ops@example.com
 infra_legacy_services: []
 YAML
+  if [[ "${become_scope:-host}" == group ]]; then
+    printf 'ansible_become: true\n' >> "$scratch/inventory/group_vars/mb_ai.yml"
+  fi
 }
 site "$subnet"
 export INFRA_INVENTORY="$scratch/inventory/hosts.yml"
@@ -94,6 +104,33 @@ run_infra() {
   else
     ./infra "$@"
   fi
+}
+precedence_probe() {
+  # Use the same restricted Runner, credentials and real SSH/sudo as the CLI.
+  local password_flags=() driver=() terminal_flags=(-i)
+  if [[ "$mode" == password ]]; then
+    password_flags+=(--ask-become-pass)
+    driver=(python3 ci/ask-become.py)
+    terminal_flags=(-it)
+  fi
+  "${driver[@]}" docker run --rm "${terminal_flags[@]}" --init --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --network "$network" \
+    --user "$(id -u):$(id -g)" \
+    --tmpfs /tmp:rw,nosuid,nodev,mode=1777,size=64m \
+    --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+    --mount "type=bind,src=$scratch/inventory,dst=/run/inventory,readonly" \
+    --mount "type=bind,src=$scratch/identity,dst=/run/infra-ssh/identity,readonly" \
+    --mount "type=bind,src=$scratch/known_hosts,dst=/run/infra-ssh/known_hosts,readonly" \
+    --entrypoint python3 "$runner" -c '
+import os
+import sys
+sys.path.insert(0, "/opt/runner")
+from dispatch import controller_identity, ssh_environment
+os.chdir("/workspace")
+env = ssh_environment(controller_identity(os.environ))
+os.execvpe("ansible-playbook", ["ansible-playbook", "-i", "/run/inventory/hosts.yml",
+           "ci/ssh-peer-context.yml", *sys.argv[1:]], env)
+' "${password_flags[@]}"
 }
 snapshot() { docker exec -i "$node" python3 - < ci/managed-state.py; }
 # Use the shared image filesystem, not a systemd-managed runtime tmpfs.
@@ -119,15 +156,24 @@ docker exec "$node" sh -c 'test ! -e /opt/mb-ai-infra; test ! -e /etc/mb-ai-infr
 ./infra init
 run_infra preflight > "$scratch/preflight.log"
 snapshot > "$scratch/before.json"
-for pass in 1 2; do
-  run_infra check > "$scratch/check-$pass.log"
-  cat "$scratch/check-$pass.log"
-  grep -Eq 'edge01[[:space:]]*:.*unreachable=0[[:space:]]+failed=0' "$scratch/check-$pass.log"
-  if grep -Eq 'GetPassWarning|Password input may be echoed|does not support when conditional' "$scratch/check-$pass.log"; then
-    echo 'An unsafe prompt or unsupported conditional was logged' >&2; exit 1
-  fi
-  snapshot > "$scratch/after.json"
-  diff -u "$scratch/before.json" "$scratch/after.json"
+for become_scope in host group; do
+  inventory "$become_scope"
+  site "$subnet"
+  # The old become: false alone must reproduce sudo's missing session record.
+  precedence_probe > "$scratch/context-$become_scope.log"
+  cat "$scratch/context-$become_scope.log"
+  grep -q 'PASS: Inventory become overrides' "$scratch/context-$become_scope.log"
+  for pass in 1 2; do
+    check_log="$scratch/check-$become_scope-$pass.log"
+    run_infra check > "$check_log"
+    cat "$check_log"
+    grep -Eq 'edge01[[:space:]]*:.*unreachable=0[[:space:]]+failed=0' "$check_log"
+    if grep -Eq 'GetPassWarning|Password input may be echoed|does not support when conditional' "$check_log"; then
+      echo 'An unsafe prompt or unsupported conditional was logged' >&2; exit 1
+    fi
+    snapshot > "$scratch/after.json"
+    diff -u "$scratch/before.json" "$scratch/after.json"
+  done
 done
 # Fail closed before a policy apply: wrong network, absent record, malformed record.
 site 192.0.2.1/32
@@ -155,4 +201,4 @@ for package in ansible ansible-core python3-pip python3-venv make gcc git docker
   state="$(docker exec "$node" dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null || true)"
   [[ "$state" != installed ]] || { echo "Unexpected managed-node toolchain: $package" >&2; exit 1; }
 done
-echo "PASS: Ubuntu $version, $mode sudo, repeated full check, zero host policy/package/application writes and fail-closed SSH peer checks."
+echo "PASS: Ubuntu $version, $mode sudo, host/group Inventory become, repeated full check, zero host policy/package/application writes and fail-closed SSH peer checks."
