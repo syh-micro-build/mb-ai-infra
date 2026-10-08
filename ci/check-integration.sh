@@ -74,6 +74,7 @@ all:
           ansible_user: deploy
           ansible_connection: ssh
           ansible_python_interpreter: /usr/bin/python3
+          ansible_become: true
 YAML
 site() {
   cat > "$scratch/inventory/group_vars/mb_ai.yml" <<YAML
