@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false
       - name: Build the same controller toolchain
         run: docker build --build-arg VCS_REF="$GITHUB_SHA" -f runner/Dockerfile -t mb-ai-infra-runner:test .
-      - name: Plan through actual SSH, sudo, systemd and Docker without applying host changes
+      - name: Plan with host/group Inventory become through real SSH, sudo, systemd and Docker
         env:
           UBUNTU: ${{ matrix.ubuntu }}
           SUDO_MODE: ${{ matrix.sudo }}

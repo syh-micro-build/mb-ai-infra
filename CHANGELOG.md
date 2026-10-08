@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 修复 Inventory 的 ansible_become 覆盖任务 become 关键字导致 SSH 来源读取仍经过 sudo 的问题；来源读取显式关闭提权并校验登录身份，CI 覆盖 host/group Inventory 的真实 sudo 环境。
+
 - 修复默认值覆盖 Inventory 的问题，使 ACME 邮箱、签发策略和旧 Edge 迁移参数按站点配置生效。
 
 - 默认关闭 SSH pipelining，保留连接复用，补齐需要密码的 sudo 认证测试。
