@@ -1,4 +1,4 @@
-FROM python:3.12-slim-trixie@sha256:ddb0207ae1f0356c2b724d740769b0c5f5f51cc54a0525178f721825f78fe74c
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 ARG VCS_REF=local
 LABEL org.opencontainers.image.title="mb-ai-infra-runner" \
