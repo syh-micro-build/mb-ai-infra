@@ -6,4 +6,4 @@ packaging==26.3
 resolvelib==1.2.1
 MarkupSafe==3.0.4
 cffi==2.1.1
-pycparser==3.0
+pycparser==3.12
